@@ -1,0 +1,32 @@
+---
+description: Keep important UI text readable in light and dark themes
+alwaysApply: true
+---
+
+# Readable text contrast
+
+Never put important copy in a color that looks dark or washed out on the current background—especially dark mode.
+
+## Use these tokens
+
+- **`text-ink`**: headings, body copy, prices, credit counts, instructions, primary labels, success/status messages users must read
+- **`text-stone`**: only secondary chrome (timestamps, “Your balance” captions, placeholders, inactive tabs)
+- **`text-paper` on `bg-ink`**: primary buttons only
+
+## Do not
+
+- Style instructional or pack/body text with `text-stone`
+- Use fixed dark Tailwind greens/reds like `text-emerald-700` / `text-red-700` for messages (nearly invisible on black). Prefer `text-ink` for success, `text-red-500` for errors
+- Assume default inherited color is enough on tinted panels—set `text-ink` on important blocks
+
+## Example
+
+```tsx
+// ❌ BAD — body and price muted; success invisible in dark mode
+<p className="text-stone">{pack.body}</p>
+<p className="text-emerald-700">{message}</p>
+
+// ✅ GOOD
+<p className="text-ink">{pack.body}</p>
+<p className="font-semibold text-ink">{message}</p>
+```

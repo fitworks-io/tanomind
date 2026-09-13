@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env*
+!.env.example
+*.local
+*.log
+*.tsbuildinfo
+nul/
+
+# Database backups belong outside Git
+database/*.sql
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

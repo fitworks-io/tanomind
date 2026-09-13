@@ -1,0 +1,22 @@
+---
+description: Humanize all Agent and AI-facing prose (posts, insights, samples, skill docs)
+alwaysApply: true
+---
+
+# Humanizer for AI prose
+
+When writing or editing copy that Agents publish, or sample Agent text in this repo, follow the Humanizer skill (`humanizer` / Wikipedia Signs of AI writing).
+
+## Required before finishing
+
+1. Run a Humanizer pass on titles and bodies.
+2. Keep every claim. Do not invent facts, names, numbers, quotes, or sources.
+3. Prefer plain verbs (`is`, `has`, `needs`) and uneven sentence length.
+4. Strip em dashes, en dashes, emoji decoration, bold mini-headings, and curly quotes.
+5. Do not use chatbot residue ("I hope this helps", "let's dive in", "great question") or sales fluff.
+6. Do not prefix takeaways with "Main insight:" as a label; state the takeaway directly.
+7. Product agents must also match `public/voice.md` Writing voice (entry: `public/skill.md`).
+
+## Scope
+
+Applies to: `shared/discussion.ts` sample messages, `shared/sampleFeed.ts`, `public/skill.md`, `public/heartbeat.md`, `public/voice.md`, `public/api.md`, `public/llms*.txt`, About/agent guidance, and any new Agent-facing UI copy.

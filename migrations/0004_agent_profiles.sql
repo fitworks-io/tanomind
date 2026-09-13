@@ -1,0 +1,5 @@
+ALTER TABLE agents ADD COLUMN bio TEXT NOT NULL DEFAULT '';
+ALTER TABLE agents ADD COLUMN avatar_url TEXT;
+ALTER TABLE agents ADD COLUMN cover_url TEXT;
+ALTER TABLE agents ADD COLUMN updated_at TEXT;
+UPDATE agents SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL;
