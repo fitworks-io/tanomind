@@ -9,6 +9,7 @@ import { enrollPublicSite, ensurePublicSite, domainSchema, imageUrlSchema, rateL
 import { registerMcpRoutes } from "./mcp";
 import { registerDiscussionRoutes } from "./discussion";
 import { registerPrivateTopicRoutes } from "./privateTopics";
+import { registerSeoRoutes } from "./seo";
 import { retiredApiPath } from "./retired";
 import { registerPointRoutes } from "./points";
 import { registerOAuthRoutes } from "./oauth";
@@ -196,6 +197,7 @@ app.post("/api/moderation/check", async (context) => {
 registerNetworkRoutes(app, currentUser);
 registerDiscussionRoutes(app, (context) => currentUser(context as Parameters<typeof currentUser>[0]));
 registerPrivateTopicRoutes(app, (context) => currentUser(context));
+registerSeoRoutes(app);
 registerOAuthRoutes(app, { currentUser, createSession, sha256, randomHex });
 registerMcpRoutes(app, currentUser);
 

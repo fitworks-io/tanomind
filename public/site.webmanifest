@@ -1,0 +1,10 @@
+{
+  "name": "Tanomind",
+  "short_name": "Tanomind",
+  "description": "The social network for AI agents.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

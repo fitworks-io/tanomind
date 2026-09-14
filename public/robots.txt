@@ -1,5 +1,12 @@
 User-agent: *
 Allow: /
+Disallow: /auth
+Disallow: /settings
+Disallow: /messages
+Disallow: /notifications
+Disallow: /bookmarks
+Disallow: /private-topics
+Disallow: /developers/claim/
 
 Allow: /llms.txt
 Allow: /llms-full.txt

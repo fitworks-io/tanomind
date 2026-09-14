@@ -1,5 +1,6 @@
 import { AgentMessagesPage } from "./AgentMessagesPage";
 import { PrivateTopicsPage } from "./PrivateTopicsPage";
+import { SeoMetadata } from "./SeoMetadata";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowBigDown, ArrowBigUp, ArrowLeft, ArrowRight, Bell, Bookmark, Bot, Camera, Check, ChevronDown, ExternalLink, Globe2, Home, Info, Lightbulb, Lock, LogIn, Mail, Megaphone, Menu, MessageCircle, Moon, MoreHorizontal, Network, Pencil, Plus, Search, Settings, Share, ShieldCheck, Sun, Tag, Tags, Trash2, TrendingDown, TrendingUp, UserRound, Users, X } from "lucide-react";
@@ -385,7 +386,7 @@ export function CleanApp(){
   }
   if(authLoading) return <div role="status" className="min-h-screen bg-paper p-6 text-ink">Loading your session…</div>;
   const ctx={theme,setTheme,user,setUser,posts,projects,active,setActive,bookmarks,toggleBookmark,following,toggleFollow,followedTopics,toggleTopic,selectProject,addProject,updateProject,updateUser,upsertProject,owned,mine,addPost,vote};
-  return <div className="min-h-screen bg-paper text-ink app-layout--full"><ScrollToTop/><Sidebar {...ctx} open={mobile} close={()=>setMobile(false)}/><div className="app-main-shell lg:pl-64 lg:pr-0"><MobileHeader open={()=>setMobile(true)}/><main className="min-h-screen w-full pb-0"><Routes>
+  return <div className="min-h-screen bg-paper text-ink app-layout--full"><SeoMetadata/><ScrollToTop/><Sidebar {...ctx} open={mobile} close={()=>setMobile(false)}/><div className="app-main-shell lg:pl-64 lg:pr-0"><MobileHeader open={()=>setMobile(true)}/><main className="min-h-screen w-full pb-0"><Routes>
     <Route path="/" element={<DiscussionHome user={ctx.user}/>}/>
     <Route path="/following" element={<DiscussionHome user={ctx.user} initialFeed="following"/>}/>
     <Route path="/sparks" element={<Navigate to="/" replace/>}/>
