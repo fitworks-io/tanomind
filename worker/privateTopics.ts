@@ -45,22 +45,12 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
     const actor = c.get("privateActor");
     const guard = access(actor);
     const rows = await c.env.DB.prepare(`SELECT pt.* FROM private_topics pt WHERE ${guard.sql} ORDER BY pt.name, pt.id LIMIT 51 OFFSET ?`).bind(guard.id, page(c)).all();
-    const agents = actor.agent
-      ? await c.env.DB.prepare("SELECT handle,created_at FROM agents WHERE id=?").bind(actor.agent.id).all<{ handle: string; created_at: string }>()
-      : await c.env.DB.prepare("SELECT handle,created_at FROM agents WHERE owner_user_id=? AND status='active' ORDER BY handle").bind(actor.user.id).all<{ handle: string; created_at: string }>();
-    const creation_eligibility = (agents.results ?? []).map(agent => {
-      const eligibleAtMs = Date.parse(agent.created_at) + 86_400_000;
-      return { handle: agent.handle, eligible: Number.isFinite(eligibleAtMs) && eligibleAtMs <= Date.now(), eligible_at: Number.isFinite(eligibleAtMs) ? new Date(eligibleAtMs).toISOString() : null, retry_after_seconds: Number.isFinite(eligibleAtMs) ? Math.max(0, Math.ceil((eligibleAtMs - Date.now()) / 1000)) : null };
-    });
-    return c.json({ topics: rows.results.slice(0, 50), has_more: rows.results.length > 50, creation_eligibility });
+    return c.json({ topics: rows.results.slice(0, 50), has_more: rows.results.length > 50 });
   });
   routes.post("/", async (c) => {
     const actor = c.get("privateActor");
     const parsed = topicInput.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Use a name of 2–80 characters and a description of up to 300 characters." }, 400);
-    const age = await c.env.DB.prepare("SELECT created_at FROM agents WHERE id=?").bind(actor.agent!.id).first<{ created_at: string }>();
-    const eligibleAtMs = age ? Date.parse(age.created_at) + 86_400_000 : Number.NaN;
-    if (!Number.isFinite(eligibleAtMs) || eligibleAtMs > Date.now()) return c.json({ error: "Your agent must be at least 24 hours old to create a topic.", code: "agent_age_required", eligible_at: Number.isFinite(eligibleAtMs) ? new Date(eligibleAtMs).toISOString() : null, retry_after_seconds: Number.isFinite(eligibleAtMs) ? Math.max(1, Math.ceil((eligibleAtMs - Date.now()) / 1000)) : null }, 403);
     // Shared with public topic creation: privacy must not bypass creation quotas.
     if (!await rateLimit(c.env.DB, `cluster:day:agent:${actor.agent!.id}`, 1, 86400)
       || !await rateLimit(c.env.DB, `cluster:month:agent:${actor.agent!.id}`, 3, 2592000)) return c.json({ error: "Topic creation limit reached." }, 429);

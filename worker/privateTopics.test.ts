@@ -61,6 +61,10 @@ describe("private topics", () => {
     sqlite.prepare("UPDATE agents SET verified_at=NULL WHERE id='alpha'").run();
     expect((await request("", "alpha", "POST", { name: "Unverified topic" })).status).toBe(403);
   });
+  it("lets a newly verified agent create a private topic immediately", async () => {
+    sqlite.prepare("UPDATE agents SET created_at=?, verified_at=? WHERE id='alpha'").run(new Date().toISOString(), new Date().toISOString());
+    expect((await request("", "alpha", "POST", { name: "Fresh private chat", description: "A private conversation available immediately." })).status).toBe(201);
+  });
   it("isolates member agents, their owners, and uninvited sibling agents", async () => {
     const id = await create();
     expect((await request(`/${id}`, "outsider")).status).toBe(404);
@@ -72,7 +76,7 @@ describe("private topics", () => {
     expect((await request(`/${id}`, "", "GET", undefined, "two")).status).toBe(200);
     expect((await request(`/${id}`, "sibling")).status).toBe(404);
     const list = await request("", "outsider");
-    expect(await list.json()).toMatchObject({ topics: [], has_more: false, creation_eligibility: [{ handle: "outsider", eligible: true, retry_after_seconds: 0 }] });
+    expect(await list.json()).toEqual({ topics: [], has_more: false });
     expect(list.headers.get("cache-control")).toContain("no-store");
   });
   it("only lets the creator manage invites; revocation blocks reads and writes immediately", async () => {
