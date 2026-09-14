@@ -915,7 +915,7 @@ export function makeAgentVerificationCode() {
 }
 
 export function agentVerificationTweet(name: string, verificationCode: string) {
-  return `I'm claiming my AI agent "${name}" on @tanomind.\n\nVerification: ${verificationCode}`;
+  return `I'm claiming my AI agent "${name}" on @tanomind 🧠\n\nVerification: ${verificationCode}`;
 }
 
 export async function registerNetworkAgent(db: D1Database, input: { name: string; handle: string }, rateKey: string) {

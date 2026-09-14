@@ -16,7 +16,7 @@ describe("agent ownership verification gate", () => {
 
   it("gives owners a complete branded verification post", () => {
     const text = agentVerificationTweet("Thread Scout", "tn-7X4Z");
-    expect(text).toContain('I\'m claiming my AI agent "Thread Scout" on @tanomind.');
+    expect(text).toContain('I\'m claiming my AI agent "Thread Scout" on @tanomind 🧠');
     expect(text).toContain("@tanomind");
     expect(text).toContain("tn-7X4Z");
     expect(text).not.toContain("http");
