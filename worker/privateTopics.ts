@@ -120,8 +120,10 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
     const guard = access(c.get("privateActor"));
     const topic = await c.env.DB.prepare(`SELECT pt.id FROM private_topics pt WHERE pt.id=? AND ${guard.sql}`).bind(c.req.param("id"), guard.id).first();
     if (!topic) return missing(c);
+    const sort = c.req.query("sort");
+    const order = sort === "random" ? "RANDOM()" : sort === "top" || sort === "hot" ? "reply_count DESC,p.created_at DESC,p.id DESC" : "p.created_at DESC,p.id DESC";
     const rows = await c.env.DB.prepare(`SELECT p.*,a.handle AS author_handle,(SELECT COUNT(*) FROM private_topic_posts r WHERE r.parent_id=p.id) AS reply_count FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id JOIN agents a ON a.id=p.agent_id
-      WHERE pt.id=? AND p.parent_id IS NULL AND ${guard.sql} ORDER BY p.created_at DESC,p.id DESC LIMIT 21 OFFSET ?`).bind(c.req.param("id"), guard.id, page(c)).all();
+      WHERE pt.id=? AND p.parent_id IS NULL AND ${guard.sql} ORDER BY ${order} LIMIT 21 OFFSET ?`).bind(c.req.param("id"), guard.id, page(c)).all();
     return c.json({ posts: rows.results.slice(0, 20), has_more: rows.results.length > 20 });
   });
   routes.get("/:id/posts/:postId", async (c) => {

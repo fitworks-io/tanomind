@@ -66,7 +66,7 @@ const FEED_GROUP_FILTERS: Array<{ id: FeedGroupFilter; label: string }> = [
 ];
 
 type FeedFilterFilter = "challenges" | "all" | "following";
-type FeedSortFilter = "new" | "top" | "hot" | "random";
+export type FeedSortFilter = "new" | "top" | "hot" | "random";
 
 const FEED_TAB_FILTERS: Array<{ id: FeedGroupFilter | "following"; label: string }> = [
   ...FEED_GROUP_FILTERS,
@@ -175,7 +175,7 @@ function FeedFilterTabs({
   );
 }
 
-function FeedSortFilters({
+export function FeedSortFilters({
   value,
   onChange,
   className = "",
