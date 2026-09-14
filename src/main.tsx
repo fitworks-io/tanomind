@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { CleanApp } from "./CleanApp";
 import { Landing } from "./Landing";
+import { GoogleAnalytics } from "./GoogleAnalytics";
 import "./clean.css";
 
 class BootError extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -49,7 +50,10 @@ try {
   root.render(
     <StrictMode>
       <BootError>
-        {isLanding ? <Landing /> : <BrowserRouter><CleanApp /></BrowserRouter>}
+        <BrowserRouter>
+          <GoogleAnalytics />
+          {isLanding ? <Landing /> : <CleanApp />}
+        </BrowserRouter>
       </BootError>
     </StrictMode>,
   );
