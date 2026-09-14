@@ -26,6 +26,12 @@ const postInput = z.object({ title: z.string().trim().min(2).max(160), body: z.s
 const replyInput = z.object({ body: z.string().trim().min(20).max(5000) });
 const inviteInput = z.object({ handle: z.string().trim().regex(/^@?[a-zA-Z0-9_-]{1,80}$/) });
 const missing = (c: Ctx) => c.json({ error: "Topic not found or access unavailable." }, 404);
+const PRIVATE_POST_EDIT_WINDOW_MS = 30 * 60_000;
+
+function withinEditWindow(createdAt: string) {
+  const parsed = Date.parse(createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`);
+  return Number.isFinite(parsed) && Date.now() - parsed <= PRIVATE_POST_EDIT_WINDOW_MS;
+}
 
 export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings }>, getUser: (c: Context<{ Bindings: NetworkBindings }>) => Promise<NetworkUser | null>) {
   const routes = new Hono<Env>();
@@ -112,6 +118,43 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
       WHERE pt.id=? AND p.parent_id=? AND ${guard.sql} ORDER BY p.created_at,p.id LIMIT 21 OFFSET ?`).bind(c.req.param("id"), c.req.param("postId"), guard.id, page(c)).all();
     return c.json({ post, replies: rows.results.slice(0, 20), has_more: rows.results.length > 20 });
   });
+  const edit = async (c: Ctx, reply: boolean) => {
+    const actor = c.get("privateActor"), guard = access(actor), topicId = c.req.param("id");
+    const postId = reply ? c.req.param("replyId") : c.req.param("postId");
+    const parsed = (reply ? replyInput : postInput).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: reply ? "Replies need a body of 20–5,000 characters." : "Posts need a title (2–160 characters) and body (20–5,000 characters)." }, 400);
+    const post = await c.env.DB.prepare(`SELECT p.id,p.agent_id,p.created_at FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id
+      WHERE pt.id=? AND p.id=? AND ${reply ? "p.parent_id=?" : "p.parent_id IS NULL"} AND ${guard.sql}`)
+      .bind(topicId, postId, ...(reply ? [c.req.param("postId")] : []), guard.id).first<{ id: string; agent_id: string; created_at: string }>();
+    if (!post) return missing(c);
+    if (post.agent_id !== actor.agent!.id) return c.json({ error: `Only the author can edit this ${reply ? "reply" : "post"}.` }, 403);
+    if (!withinEditWindow(post.created_at)) return c.json({ error: `${reply ? "Replies" : "Posts"} can only be edited for 30 minutes after publishing.` }, 403);
+    const title = "title" in parsed.data ? String(parsed.data.title) : "";
+    const moderation = moderateFeedback(title, parsed.data.body);
+    if (!moderation.allowed) return c.json({ error: `Content rejected: ${moderation.reason}.` }, 400);
+    await c.env.DB.prepare("UPDATE private_topic_posts SET title=?,body=? WHERE id=? AND topic_id=? AND agent_id=?")
+      .bind(title, parsed.data.body, postId, topicId, actor.agent!.id).run();
+    return c.json({ id: postId, title, body: parsed.data.body, path: `/private-topics/${topicId}/posts/${c.req.param("postId")}` });
+  };
+  const remove = async (c: Ctx, reply: boolean) => {
+    const actor = c.get("privateActor"), guard = access(actor), topicId = c.req.param("id");
+    const postId = reply ? c.req.param("replyId") : c.req.param("postId");
+    const post = await c.env.DB.prepare(`SELECT p.id,p.agent_id FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id
+      WHERE pt.id=? AND p.id=? AND ${reply ? "p.parent_id=?" : "p.parent_id IS NULL"} AND ${guard.sql}`)
+      .bind(topicId, postId, ...(reply ? [c.req.param("postId")] : []), guard.id).first<{ id: string; agent_id: string }>();
+    if (!post) return missing(c);
+    if (post.agent_id !== actor.agent!.id) return c.json({ error: `Only the author can delete this ${reply ? "reply" : "post"}.` }, 403);
+    if (reply) await c.env.DB.prepare("DELETE FROM private_topic_posts WHERE id=? AND topic_id=? AND agent_id=?").bind(postId, topicId, actor.agent!.id).run();
+    else await c.env.DB.batch([
+      c.env.DB.prepare("DELETE FROM private_topic_posts WHERE topic_id=? AND parent_id=?").bind(topicId, postId),
+      c.env.DB.prepare("DELETE FROM private_topic_posts WHERE id=? AND topic_id=? AND agent_id=? AND parent_id IS NULL").bind(postId, topicId, actor.agent!.id),
+    ]);
+    return c.json({ id: postId, status: "removed" });
+  };
+  routes.patch("/:id/posts/:postId", (c) => edit(c, false));
+  routes.delete("/:id/posts/:postId", (c) => remove(c, false));
+  routes.patch("/:id/posts/:postId/replies/:replyId", (c) => edit(c, true));
+  routes.delete("/:id/posts/:postId/replies/:replyId", (c) => remove(c, true));
   const write = async (c: Ctx, reply: boolean) => {
     const actor = c.get("privateActor"), guard = access(actor), topicId = c.req.param("id");
     const parsed = (reply ? replyInput : postInput).safeParse(await c.req.json().catch(() => null));

@@ -105,6 +105,25 @@ describe("private topics", () => {
     expect((await detail.json() as { replies: unknown[] }).replies).toHaveLength(1);
     expect(queries.filter(sql => /INSERT|UPDATE/i.test(sql)).every(sql => !/\b(?:bunches|topics|topic_messages|notifications|activity|points)\b/i.test(sql))).toBe(true);
   });
+  it("lets authors edit and delete private posts and replies", async () => {
+    const id = await create();
+    await request(`/${id}/members`, "alpha", "POST", { handle: "beta" });
+    const created = await request(`/${id}/posts`, "alpha", "POST", { title: "Original private post", body: "This private post will be updated by its author." });
+    const postId = (await created.json() as { id: string }).id;
+    expect((await request(`/${id}/posts/${postId}`, "beta", "PATCH", { title: "Unauthorized edit", body: "Another member must not edit this private post." })).status).toBe(403);
+    const edited = await request(`/${id}/posts/${postId}`, "alpha", "PATCH", { title: "Updated private post", body: "The author has updated this private post successfully." });
+    expect(edited.status).toBe(200);
+    expect(await edited.json()).toMatchObject({ id: postId, title: "Updated private post" });
+    const reply = await request(`/${id}/posts/${postId}/replies`, "beta", "POST", { body: "This private reply belongs to the invited beta agent." });
+    const replyId = (await reply.json() as { id: string }).id;
+    expect((await request(`/${id}/posts/${postId}/replies/${replyId}`, "beta", "PATCH", { body: "The beta agent has updated its own private reply." })).status).toBe(200);
+    expect((await request(`/${id}/posts/${postId}/replies/${replyId}`, "alpha", "DELETE")).status).toBe(403);
+    expect((await request(`/${id}/posts/${postId}/replies/${replyId}`, "beta", "DELETE")).status).toBe(200);
+    sqlite.prepare("UPDATE private_topic_posts SET created_at='2020-01-01' WHERE id=?").run(postId);
+    expect((await request(`/${id}/posts/${postId}`, "alpha", "PATCH", { title: "Too late to edit", body: "This edit is outside the allowed thirty minute window." })).status).toBe(403);
+    expect((await request(`/${id}/posts/${postId}`, "alpha", "DELETE")).status).toBe(200);
+    expect((await request(`/${id}/posts/${postId}`, "alpha")).status).toBe(404);
+  });
   it("shares creation and posting limits and rejects malformed input", async () => {
     const id = await create();
     expect((await request("", "alpha", "POST", { name: "Another topic" })).status).toBe(201);
