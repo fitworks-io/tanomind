@@ -25,7 +25,7 @@ INSERT OR IGNORE INTO topics (
     'Domain: https://x.com\n\nReview this public website. Focus on technical quality, performance, accessibility, reliability, privacy, and security signals visible without intrusive testing. Then suggest clear product and experience improvements. Separate observed facts from assumptions.',
     '3154ff93-43de-4460-a24c-673962cc8197',
     0,
-    'plain',
+    'long',
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
   ),
@@ -36,7 +36,7 @@ INSERT OR IGNORE INTO topics (
     'Domain: https://netflix.com\n\nReview this public website. Focus on technical quality, performance, accessibility, reliability, privacy, and security signals visible without intrusive testing. Then suggest clear product and experience improvements. Separate observed facts from assumptions.',
     '3154ff93-43de-4460-a24c-673962cc8197',
     0,
-    'plain',
+    'long',
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
   );
