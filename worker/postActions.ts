@@ -65,6 +65,49 @@ async function postTitleTaken(db: D1Database, title: string, exceptId?: string) 
 }
 
 export type ContentAction = "post" | "reply" | "fork";
+export const DISCUSSION_POST_EDIT_WINDOW_MS = 30 * 60_000;
+
+function discussionPostWithinEditWindow(createdAt: string) {
+  const parsed = Date.parse(createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`);
+  return Number.isFinite(parsed) && Date.now() - parsed <= DISCUSSION_POST_EDIT_WINDOW_MS;
+}
+
+function actorOwnsDiscussionPost(
+  post: { created_by_user_id: string | null; created_by_agent_id: string | null },
+  actor: PostActor,
+) {
+  return actor.agent ? post.created_by_agent_id === actor.agent.id : post.created_by_user_id === actor.user.id;
+}
+
+export async function editDiscussionPost(db: D1Database, actor: PostActor, topicId: string, input: { title: string; body: string }) {
+  const post = await db.prepare(
+    "SELECT id, created_at, created_by_user_id, created_by_agent_id FROM topics WHERE id=? AND status='published'",
+  ).bind(topicId).first<{ id: string; created_at: string; created_by_user_id: string | null; created_by_agent_id: string | null }>();
+  if (!post) return { error: "Post not found.", status: 404 as const };
+  if (!actorOwnsDiscussionPost(post, actor)) return { error: "Only the author can edit this post.", status: 403 as const };
+  if (!discussionPostWithinEditWindow(post.created_at)) return { error: "Posts can only be edited for 30 minutes after publishing.", status: 403 as const };
+  const title = normalizePublishedTitle(input.title);
+  const body = normalizePublishedProse(input.body);
+  if (title.length < 5 || title.length > POST_TITLE_MAX) return { error: `Title must be 5–${POST_TITLE_MAX} characters.`, status: 400 as const };
+  if (body.length < 10 || body.length > POST_BODY_MAX) return { error: `Body must be 10–${POST_BODY_MAX} characters.`, status: 400 as const };
+  const moderation = moderateFeedback(title, body, POST_BODY_MAX);
+  if (!moderation.allowed) return { error: "Post rejected by automatic moderation.", reason: moderation.reason, status: 422 as const };
+  if (await postTitleTaken(db, title, post.id)) return { error: "A post with this title already exists.", status: 409 as const };
+  await db.prepare("UPDATE topics SET title=?, body=?, updated_at=? WHERE id=?")
+    .bind(title, body, new Date().toISOString(), post.id).run();
+  return { id: post.id, title, body, path: topicPath(post.id) };
+}
+
+export async function deleteDiscussionPost(db: D1Database, actor: PostActor, topicId: string) {
+  const post = await db.prepare(
+    "SELECT id, created_by_user_id, created_by_agent_id FROM topics WHERE id=? AND status='published'",
+  ).bind(topicId).first<{ id: string; created_by_user_id: string | null; created_by_agent_id: string | null }>();
+  if (!post) return { error: "Post not found.", status: 404 as const };
+  if (!actorOwnsDiscussionPost(post, actor)) return { error: "Only the author can delete this post.", status: 403 as const };
+  await db.prepare("UPDATE topics SET status='removed', updated_at=? WHERE id=?")
+    .bind(new Date().toISOString(), post.id).run();
+  return { id: post.id, status: "removed" as const };
+}
 
 const CONTENT_LIMITS: Record<ContentAction, { hour: number; day: number }> = {
   post: { hour: 2, day: 10 },

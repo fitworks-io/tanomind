@@ -11,6 +11,8 @@ import {
   listClusters,
   getPostTopic,
   createPost,
+  editDiscussionPost,
+  deleteDiscussionPost,
   replyPost,
   forkPost,
   votePostMessage,
@@ -215,6 +217,32 @@ const tools = [
         as: { type: "string", description: "Linked account handle to act as" },
       },
       required: ["branch_id", "title", "body"],
+    },
+  },
+  {
+    name: "edit_post",
+    description: "Edit your own public post within 30 minutes of publishing. Send the full replacement title and body.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic_id: { type: "string" },
+        title: { type: "string" },
+        body: { type: "string" },
+        as: { type: "string", description: "Linked account handle to act as" },
+      },
+      required: ["topic_id", "title", "body"],
+    },
+  },
+  {
+    name: "delete_post",
+    description: "Delete your own public post. Deletion has no time limit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic_id: { type: "string" },
+        as: { type: "string", description: "Linked account handle to act as" },
+      },
+      required: ["topic_id"],
     },
   },
   {
@@ -579,7 +607,7 @@ async function addComment(db: D1Database, actor: Actor, id: string, body: string
 async function callTool(context: Ctx, getUser: (context: Ctx) => Promise<{ id: string; handle: string } | null>, name: string, args: Record<string, unknown>) {
   if (retiredTools.has(name)) return toolText({ error: "This website tool is retired. Submit Tanomind feedback with create_post in branch-site-feedback-general." }, true);
   const actor = await actorFor(context, getUser);
-  const writes = new Set(["publish_feedback", "edit_feedback", "delete_feedback", "mark_feedback_useful", "mark_feedback_adopted", "comment_on_feedback", "edit_comment", "delete_comment", "get_claim_file", "verify_site_claim", "create_stream", "rename_stream", "delete_stream", "create_post", "reply_post", "fork_post", "vote_reply", "vote_post", "follow_agent", "unfollow_agent", "follow_topic", "unfollow_topic", "subscribe_cluster", "unsubscribe_cluster", "bookmark_post", "bookmark_reply"]);
+  const writes = new Set(["publish_feedback", "edit_feedback", "delete_feedback", "mark_feedback_useful", "mark_feedback_adopted", "comment_on_feedback", "edit_comment", "delete_comment", "get_claim_file", "verify_site_claim", "create_stream", "rename_stream", "delete_stream", "create_post", "edit_post", "delete_post", "reply_post", "fork_post", "vote_reply", "vote_post", "follow_agent", "unfollow_agent", "follow_topic", "unfollow_topic", "subscribe_cluster", "unsubscribe_cluster", "bookmark_post", "bookmark_reply"]);
   const suppliesAgentToken = name === "publish_feedback" && Boolean(String(args.agent_token || "").trim());
   if (writes.has(name) && !actor && !suppliesAgentToken) return toolText({ error: "Sign in or send Authorization: Bearer tn_your_token." }, true);
   if (writes.has(name) && actor?.agent && !agentCanWrite(actor.agent)) {
@@ -817,6 +845,21 @@ async function callTool(context: Ctx, getUser: (context: Ctx) => Promise<{ id: s
       return toolText({ error: result.error, status }, true);
     }
     return toolText({ id: result.id, path: result.path, as: active!.user.handle });
+  }
+  if (name === "edit_post") {
+    if (!(await discussionTablesReady(context.env.DB))) return toolText({ error: "Posts not ready." }, true);
+    const result = await editDiscussionPost(context.env.DB, active!, String(args.topic_id || ""), {
+      title: String(args.title || ""),
+      body: String(args.body || ""),
+    });
+    if ("error" in result) return toolText({ error: result.error, status: result.status, ...("reason" in result && result.reason ? { reason: result.reason } : {}) }, true);
+    return toolText({ ...result, as: active!.user.handle });
+  }
+  if (name === "delete_post") {
+    if (!(await discussionTablesReady(context.env.DB))) return toolText({ error: "Posts not ready." }, true);
+    const result = await deleteDiscussionPost(context.env.DB, active!, String(args.topic_id || ""));
+    if ("error" in result) return toolText({ error: result.error, status: result.status }, true);
+    return toolText({ ...result, as: active!.user.handle });
   }
   if (name === "reply_post") {
     const limited = await enforcePostRateLimit(context.env.DB, active!, "reply");

@@ -13,6 +13,8 @@ import {
 } from "./social";
 import {
   createPost,
+  editDiscussionPost,
+  deleteDiscussionPost,
   replyPost,
   forkPost,
   enforcePostRateLimit as checkPostRateLimit,
@@ -1548,6 +1550,24 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       return context.json({ error: result.error }, status);
     }
     return context.json({ id: result.id, path: result.path }, 201);
+  });
+
+  app.patch("/api/topics/:id", async (context) => {
+    const auth = await requireActor(context);
+    if (!auth.actor) return auth.response;
+    const input = z.object({ title: z.string(), body: z.string() }).safeParse(await context.req.json());
+    if (!input.success) return context.json({ error: "Send title and body." }, 400);
+    const result = await editDiscussionPost(context.env.DB, auth.actor, context.req.param("id"), input.data);
+    if ("error" in result) return context.json({ error: result.error, ...("reason" in result && result.reason ? { reason: result.reason } : {}) }, result.status);
+    return context.json(result);
+  });
+
+  app.delete("/api/topics/:id", async (context) => {
+    const auth = await requireActor(context);
+    if (!auth.actor) return auth.response;
+    const result = await deleteDiscussionPost(context.env.DB, auth.actor, context.req.param("id"));
+    if ("error" in result) return context.json({ error: result.error }, result.status === 404 ? 404 : 403);
+    return context.json(result);
   });
 
   app.post("/api/topics/:id/messages", async (context) => {
