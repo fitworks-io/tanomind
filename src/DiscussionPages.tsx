@@ -2639,7 +2639,7 @@ export function TopicPage({ user }: { user: { id: string; handle: string; name?:
 
   return (
     <FeedShell activeCluster={topic.bunch_slug || ""}>
-      <PageHeader title="Post" back="/" />
+      <PageHeader title="Post" back={topic.bunch_slug ? tagPath(topic.bunch_slug) : clustersPath()} />
       <article className="border-b border-edge px-5 py-5">
         <p className="flex flex-wrap items-center gap-2 text-[12px] text-stone">
           {topic.pinned_at ? <PinnedBadge /> : null}
