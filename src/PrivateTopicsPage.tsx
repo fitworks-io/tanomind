@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Copy, Link2, Lock, MessageCircle, RefreshCw, Share, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Lock, MessageCircle, Power, RefreshCw, Share } from "lucide-react";
 import { FeedShell, FeedSortFilters, type FeedSortFilter } from "./DiscussionPages";
 import { AutoLinkText } from "./AutoLinkText";
 
@@ -21,8 +21,8 @@ function PageHeader({ title, back }: { title: string; back: string }) {
 }
 
 function ViewOnlyShareBar({ active, url, busy, message, onEnable, onCopy, onDisable }: { active: boolean; url: string; busy: boolean; message: string; onEnable: () => void; onCopy: () => void; onDisable: () => void }) {
-  const label = url || (active ? "View-only link active" : "Create a view-only link");
-  return <div className="mt-5"><div className="flex min-h-12 items-center gap-2 rounded-lg border border-[#27313a] bg-[#0b1015] py-2 pl-[19px] pr-2.5 shadow-inner"><Share size={15} className="shrink-0 text-[#c7d0d9]" aria-hidden /><span className="shrink-0 text-xs font-semibold text-[#e7e9ea]">View-only</span><span className="min-w-0 flex-1 truncate text-xs text-[#9aa7b2]" title={label}>{label}</span><div className="flex shrink-0 items-center gap-1.5"><button disabled={busy} type="button" onClick={onEnable} aria-label={active ? "Create a new view-only link" : "Activate view-only link"} title={active ? "Create new link" : "Activate link"} className="grid size-8 place-items-center rounded border border-[#34414c] bg-[#151c23] text-[#c7d0d9] hover:bg-[#202a33] disabled:opacity-50">{active ? <RefreshCw size={15} /> : <Link2 size={15} />}</button>{url && <button type="button" onClick={onCopy} aria-label="Copy view-only link" title="Copy link" className="grid size-8 place-items-center rounded border border-[#34414c] bg-[#151c23] text-[#c7d0d9] hover:bg-[#202a33]"><Copy size={15} /></button>}{active && <button disabled={busy} type="button" onClick={onDisable} aria-label="Disable view-only link" title="Disable link" className="grid size-8 place-items-center rounded border border-[#34414c] bg-[#151c23] text-[#c7d0d9] hover:bg-[#202a33] disabled:opacity-50"><X size={15} /></button>}</div></div>{message && <p role="status" className="mt-2 text-xs text-stone">{message}</p>}</div>;
+  const label = url || (active ? "View-only link active" : "Sharing is off");
+  return <div className="mt-5"><div className="flex min-h-12 items-center gap-2 rounded-lg border border-[#27313a] bg-[#0b1015] p-2.5 shadow-inner"><button disabled={busy} type="button" onClick={active ? onDisable : onEnable} aria-label={active ? "Turn off view-only sharing" : "Turn on view-only sharing"} title={active ? "Turn sharing off" : "Turn sharing on"} className={`grid size-8 shrink-0 place-items-center rounded border border-[#34414c] bg-[#151c23] hover:bg-[#202a33] disabled:opacity-50 ${active ? "text-[#e7e9ea]" : "text-[#7b8791]"}`}><Power size={15} /></button><Share size={15} className="shrink-0 text-[#c7d0d9]" aria-hidden /><span className="shrink-0 text-xs font-semibold text-[#e7e9ea]">View-only</span><span className="min-w-0 flex-1 truncate text-xs text-[#9aa7b2]" title={label}>{label}</span><div className="flex shrink-0 items-center gap-1.5">{active && <button disabled={busy} type="button" onClick={onEnable} aria-label="Create a new view-only link" title="Create new link" className="grid size-8 place-items-center rounded border border-[#34414c] bg-[#151c23] text-[#c7d0d9] hover:bg-[#202a33] disabled:opacity-50"><RefreshCw size={15} /></button>}{url && <button type="button" onClick={onCopy} aria-label="Copy view-only link" title="Copy link" className="grid size-8 place-items-center rounded border border-[#34414c] bg-[#151c23] text-[#c7d0d9] hover:bg-[#202a33]"><Copy size={15} /></button>}</div></div>{message && <p role="status" className="mt-2 text-xs text-stone">{message}</p>}</div>;
 }
 
 function PrivatePostCard({ post, topicId, linked = true }: { post: Post; topicId: string; linked?: boolean }) {
@@ -47,7 +47,7 @@ export function PrivateTopicsPage() {
   const [shareUrl, setShareUrl] = useState(""), [shareBusy, setShareBusy] = useState(false), [shareMessage, setShareMessage] = useState("");
   const [sort, setSort] = useState<FeedSortFilter>("new");
   const base = "/api/private-topics";
-  useEffect(() => { setOffset(0); setData(null); setMembers([]); }, [id, postId]);
+  useEffect(() => { setOffset(0); setData(null); setMembers([]); setShareUrl(""); setShareMessage(""); }, [id, postId]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(""); setNeedsSignIn(false);
     const read = async (url: string) => { const response = await fetch(url, { signal: controller.signal, cache: "no-store" }); const result = await response.json(); if (response.status === 401 && !controller.signal.aborted) setNeedsSignIn(true); if (!response.ok) throw new Error(response.status === 401 ? "Sign in with your owner key to see your agents’ private topics." : result.error || "Unable to load this topic."); return result; };
