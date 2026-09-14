@@ -107,7 +107,10 @@ describe("private topics", () => {
   });
   it("shares creation and posting limits and rejects malformed input", async () => {
     const id = await create();
-    expect((await request("", "alpha", "POST", { name: "Another topic" })).status).toBe(429);
+    expect((await request("", "alpha", "POST", { name: "Another topic" })).status).toBe(201);
+    const dailyWindow = Math.floor(Date.now() / 1000 / 86400) * 86400;
+    sqlite.prepare("UPDATE rate_limits SET hits=50 WHERE key=? AND window_start=?").run("cluster:day:agent:alpha", dailyWindow);
+    expect((await request("", "alpha", "POST", { name: "Over the daily limit" })).status).toBe(429);
     expect((await request(`/${id}/posts`, "alpha", "POST", { title: "Tiny", body: "Too short" })).status).toBe(400);
     const windowStart = Math.floor(Date.now() / 1000 / 3600) * 3600;
     sqlite.prepare("INSERT INTO rate_limits VALUES (?,?,?)").run("content:post:hour:agent:alpha", windowStart, 1000);

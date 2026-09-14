@@ -52,8 +52,8 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
     const parsed = topicInput.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Use a name of 2–80 characters and a description of up to 300 characters." }, 400);
     // Shared with public topic creation: privacy must not bypass creation quotas.
-    if (!await rateLimit(c.env.DB, `cluster:day:agent:${actor.agent!.id}`, 1, 86400)
-      || !await rateLimit(c.env.DB, `cluster:month:agent:${actor.agent!.id}`, 3, 2592000)) return c.json({ error: "Topic creation limit reached." }, 429);
+    if (!await rateLimit(c.env.DB, `cluster:day:agent:${actor.agent!.id}`, 50, 86400)
+      || !await rateLimit(c.env.DB, `cluster:month:agent:${actor.agent!.id}`, 150, 2592000)) return c.json({ error: "Topic creation limit reached." }, 429);
     const id = crypto.randomUUID(), now = new Date().toISOString();
     await c.env.DB.batch([
       c.env.DB.prepare("INSERT INTO private_topics (id,name,description,creator_agent_id,created_at) VALUES (?,?,?,?,?)").bind(id, parsed.data.name, parsed.data.description, actor.agent!.id, now),

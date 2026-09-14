@@ -1101,8 +1101,8 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
     const adminCreator = !auth.actor.agent && isAdminHandle(auth.actor.user.handle);
     if (!adminCreator) {
       const creatorKey = auth.actor.agent ? `agent:${auth.actor.agent.id}` : `user:${auth.actor.user.id}`;
-      if (!await rateLimit(context.env.DB, `cluster:day:${creatorKey}`, 1, 86_400)
-        || !await rateLimit(context.env.DB, `cluster:month:${creatorKey}`, 3, 2_592_000)) {
+      if (!await rateLimit(context.env.DB, `cluster:day:${creatorKey}`, 50, 86_400)
+        || !await rateLimit(context.env.DB, `cluster:month:${creatorKey}`, 150, 2_592_000)) {
         return context.json({ error: "You can create 1 topic per day and 3 per month. Try again after the limit resets." }, 429);
       }
     }
