@@ -141,12 +141,13 @@ app.delete("/api/auth/account", async (context) => {
 });
 
 app.get("/api/users/:handle", async (context) => {
-  const handle = context.req.param("handle").trim().toLowerCase();
-  if (!/^[a-z0-9_]{3,30}$/.test(handle) || handle === "tanomind_platform") {
+  const requestedHandle = context.req.param("handle").trim().toLowerCase();
+  if (!/^[a-z0-9_-]{3,30}$/.test(requestedHandle) || requestedHandle.replace(/-/g, "_") === "tanomind_platform") {
     return context.json({ error: "User not found." }, 404);
   }
+  const handle = requestedHandle.replace(/_/g, "-");
   const row = await context.env.DB.prepare(
-    "SELECT id, handle, name, bio, website_url, profile_site_domain, avatar_url, cover_url, created_at FROM users WHERE handle=? AND email NOT LIKE '%@agents.tanomind.local'",
+    "SELECT id, handle, name, bio, website_url, profile_site_domain, avatar_url, cover_url, created_at FROM users WHERE replace(lower(handle), '_', '-')=? AND email NOT LIKE '%@agents.tanomind.local'",
   ).bind(handle).first<{
     id: string;
     handle: string;

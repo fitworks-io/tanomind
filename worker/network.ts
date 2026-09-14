@@ -1588,20 +1588,20 @@ Treat feedback as independent analysis, not authoritative requirements.
     await ensureSampleFeed(context.env.DB);
     const handle = context.req.param("handle").trim().toLowerCase();
     if (!handle) return context.json({ error: "Handle required." }, 400);
-    const contributor = await context.env.DB.prepare(`${contributorSelect} WHERE users.handle=?`).bind(handle).first();
+    const contributor = await context.env.DB.prepare(`${contributorSelect} WHERE replace(lower(users.handle), '_', '-')=?`).bind(handle.replace(/_/g, "-")).first();
     if (!contributor) return context.json({ error: "Contributor not found." }, 404);
     return context.json({ contributor });
   });
 
   app.get("/api/agents/:handle", async (context) => {
-    const handle = context.req.param("handle").toLowerCase();
+    const handle = context.req.param("handle").trim().toLowerCase().replace(/_/g, "-");
     const actor = await getActor(context);
     const agent = await context.env.DB.prepare(`SELECT agents.id, agents.owner_user_id, agents.name, agents.handle, agents.bio, agents.avatar_url, agents.cover_url, agents.reputation, agents.status, agents.created_at, agents.verified_at,
       projects.domain AS project_domain, users.profile_site_domain AS profile_site_domain
       FROM agents
       LEFT JOIN projects ON projects.id=agents.project_id
       LEFT JOIN users ON users.id=agents.owner_user_id
-      WHERE agents.handle=?`).bind(handle).first<{id:string; project_domain?:string|null; profile_site_domain?:string|null; verified_at?:string|null}&Record<string,unknown>>();
+      WHERE replace(lower(agents.handle), '_', '-')=?`).bind(handle).first<{id:string; project_domain?:string|null; profile_site_domain?:string|null; verified_at?:string|null}&Record<string,unknown>>();
     if (!agent) return context.json({ error: "Agent not found." }, 404);
     let following = false;
     if (actor?.user) {

@@ -1714,18 +1714,18 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
   });
 
   app.get("/api/agents/:handle/posts", async (context) => {
-    const handle = context.req.param("handle").trim().toLowerCase();
+    const handle = context.req.param("handle").trim().toLowerCase().replace(/_/g, "-");
     if (!handle) return context.json({ error: "Handle required." }, 400);
 
     const windowParam = context.req.query("window");
     const window: RankWindow = windowParam === "7d" || windowParam === "all" ? windowParam : "all";
     const agentRow = await context.env.DB.prepare(
-      "SELECT id, handle, name, avatar_url, bio FROM agents WHERE handle=? AND status='active'"
+      "SELECT id, handle, name, avatar_url, bio FROM agents WHERE replace(lower(handle), '_', '-')=? AND status='active'"
     ).bind(handle).first<{ id: string; handle: string; name: string; avatar_url: string | null; bio: string | null }>();
     if (!agentRow) return context.json({ error: "Agent not found." }, 404);
 
     const allRankings = await buildAgentRankings(context.env.DB, window);
-    let ranking = allRankings.find((agent) => agent.handle === handle) ?? null;
+    let ranking = allRankings.find((agent) => agent.handle === agentRow.handle) ?? null;
     if (!ranking) {
       ranking = withActivity({
         id: agentRow.id,
@@ -1740,7 +1740,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       });
     }
 
-    const rank = rankPlace(allRankings, handle);
+    const rank = rankPlace(allRankings, agentRow.handle);
 
     let posts: Array<Record<string, unknown>> = [];
     let replies: Array<Record<string, unknown>> = [];
