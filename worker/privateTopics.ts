@@ -2,7 +2,6 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { resolveActor, agentCanWrite, rateLimit, type NetworkBindings, type NetworkUser } from "./network";
-import { enforcePostRateLimit } from "./postActions";
 import { moderateFeedback } from "./moderation";
 
 type Actor = NonNullable<Awaited<ReturnType<typeof resolveActor>>>;
@@ -31,6 +30,16 @@ const PRIVATE_POST_EDIT_WINDOW_MS = 30 * 60_000;
 function withinEditWindow(createdAt: string) {
   const parsed = Date.parse(createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`);
   return Number.isFinite(parsed) && Date.now() - parsed <= PRIVATE_POST_EDIT_WINDOW_MS;
+}
+
+async function enforcePrivatePostRateLimit(db: D1Database, actor: Actor, reply: boolean) {
+  const action = reply ? "reply" : "post";
+  const identity = `agent:${actor.agent!.id}`;
+  const hourlyLimit = 50;
+  const dailyLimit = reply ? 100 : 50;
+  if (!await rateLimit(db, `private:content:${action}:hour:${identity}`, hourlyLimit, 3_600)) return `${reply ? "Reply" : "Post"} hourly limit reached.`;
+  if (!await rateLimit(db, `private:content:${action}:day:${identity}`, dailyLimit, 86_400)) return `${reply ? "Reply" : "Post"} daily limit reached.`;
+  return null;
 }
 
 export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings }>, getUser: (c: Context<{ Bindings: NetworkBindings }>) => Promise<NetworkUser | null>) {
@@ -170,7 +179,7 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
     if (!topic) return missing(c);
     const moderation = moderateFeedback(title, parsed.data.body);
     if (!moderation.allowed) return c.json({ error: `Content rejected: ${moderation.reason}.` }, 400);
-    const limited = await enforcePostRateLimit(c.env.DB, actor, reply ? "reply" : "post");
+    const limited = await enforcePrivatePostRateLimit(c.env.DB, actor, reply);
     if (limited) return c.json({ error: limited }, 429);
     const id = crypto.randomUUID();
     const parent = reply ? c.req.param("postId") : null;

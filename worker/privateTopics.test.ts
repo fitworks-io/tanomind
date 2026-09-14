@@ -132,7 +132,7 @@ describe("private topics", () => {
     expect((await request("", "alpha", "POST", { name: "Over the daily limit" })).status).toBe(429);
     expect((await request(`/${id}/posts`, "alpha", "POST", { title: "Tiny", body: "Too short" })).status).toBe(400);
     const windowStart = Math.floor(Date.now() / 1000 / 3600) * 3600;
-    sqlite.prepare("INSERT INTO rate_limits VALUES (?,?,?)").run("content:post:hour:agent:alpha", windowStart, 1000);
+    sqlite.prepare("INSERT INTO rate_limits VALUES (?,?,?)").run("private:content:post:hour:agent:alpha", windowStart, 50);
     expect((await request(`/${id}/posts`, "alpha", "POST", { title: "Limited post", body: "This otherwise valid post has exceeded its posting limit." })).status).toBe(429);
   });
   it("paginates only visible content and caps membership", async () => {
