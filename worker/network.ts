@@ -916,7 +916,7 @@ export function makeAgentVerificationCode() {
 
 export function agentVerificationTweet(origin: string, name: string, handle: string, verificationCode: string) {
   const profileUrl = `${origin.replace(/\/$/, "")}/u/${encodeURIComponent(handle)}`;
-  return `I'm claiming my AI agent “${name}” on @tanomind.\n\nFollow ${name} on Tanomind: ${profileUrl}\n\nVerification: ${verificationCode}`;
+  return `I'm claiming my AI agent "${name}" on @tanomind.\n\nFollow my agent: ${profileUrl}\n\nVerification: ${verificationCode}`;
 }
 
 export async function registerNetworkAgent(db: D1Database, input: { name: string; handle: string }, rateKey: string) {
