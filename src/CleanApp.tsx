@@ -1206,14 +1206,12 @@ function AgentProfilePage(ctx:Ctx){
   const [editing,setEditing]=useState(false);
   const [formName,setFormName]=useState("");
   const [bio,setBio]=useState("");
-  const [avatarUrl,setAvatarUrl]=useState("");
-  const [coverUrl,setCoverUrl]=useState("");
   const profile=useAgentProfile(agent?.handle||handle);
   const name=agent?.name||handle.replace(/-/g," ");
   const owned=Boolean(ctx.user&&agent?.owner_user_id===ctx.user.id);
   const verified=Boolean(agent?.verified||agent?.verified_at);
   useEffect(()=>{fetch(`/api/agents/${encodeURIComponent(handle)}`).then(r=>r.ok?r.json():null).then((v:{agent?:AgentProfile}|null)=>{if(v?.agent){setAgent(v.agent);setFollowing(Boolean(v.agent.following))}}).catch(()=>undefined)},[handle]);
-  useEffect(()=>{if(editing)return;setFormName(agent?.name||name);setBio((agent?.bio||"").slice(0,BIO_MAX));setAvatarUrl(agent?.avatar_url||"");setCoverUrl(agent?.cover_url||"")},[agent,name,editing]);
+  useEffect(()=>{if(editing)return;setFormName(agent?.name||name);setBio((agent?.bio||"").slice(0,BIO_MAX))},[agent,name,editing]);
   async function toggleAgentFollow(){
     if(!ctx.user){navigate(signInTo(agentPath(handle)));return}
     setFollowBusy(true);
@@ -1225,9 +1223,9 @@ function AgentProfilePage(ctx:Ctx){
   }
   async function save(e:FormEvent){
     e.preventDefault();
-    const r=await fetch(`/api/agents/${encodeURIComponent(agent?.handle||handle)}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({name:formName,bio:bio.slice(0,BIO_MAX),avatar_url:avatarUrl.trim(),cover_url:coverUrl.trim()})});
+    const r=await fetch(`/api/agents/${encodeURIComponent(agent?.handle||handle)}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({name:formName,bio:bio.slice(0,BIO_MAX)})});
     if(!r.ok){window.alert("Could not update this profile.");return}
-    setAgent(current=>({id:current?.id||"",owner_user_id:current?.owner_user_id||ctx.user?.id||"",handle:current?.handle||handle,name:formName,bio:bio.slice(0,BIO_MAX),avatar_url:avatarUrl,cover_url:coverUrl}));
+    setAgent(current=>({id:current?.id||"",owner_user_id:current?.owner_user_id||ctx.user?.id||"",handle:current?.handle||handle,name:formName,bio:bio.slice(0,BIO_MAX)}));
     setEditing(false);
   }
   if(!agent&&!profile)return <><PageHeader title={handle} back="/"/><Empty title="Not found" body="No public profile is available for this username yet."/></>;
@@ -1238,10 +1236,13 @@ function AgentProfilePage(ctx:Ctx){
   return <>
     <PageHeader title="Agent" back="/"/>
     <section className="border-b border-edge">
-      <Banner url={editing?coverUrl:agent?.cover_url}/>
-      <div className="px-5 pb-5">
-        <div className="-mt-10 flex items-end justify-between">
-          <Face label={name} src={editing?avatarUrl||null:agent?.avatar_url} size="size-28" framed/>
+      <div className="px-5 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold text-ink">{name}</h1>
+            {verified?<span className="inline-flex items-center gap-1 rounded-sm bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink" title="Verified agent"><ShieldCheck size={12}/> Verified</span>:null}
+            <span className="rounded-sm bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone">Agent</span>
+          </div>
           <div className="flex gap-2">
             {!owned&&agent?<ProfileMessageButton user={ctx.user} handle={agent.handle||handle}/>:null}
             {!owned&&agent?<button type="button" disabled={followBusy} onClick={()=>void toggleAgentFollow()} className={`inline-flex items-center gap-1 rounded-full px-4 py-2 text-xs font-semibold ${following?"border border-rule bg-paper text-ink hover:bg-mist":"bg-ink text-paper"}`}>{following?<><Check size={13}/> Following</>:<><Plus size={13}/> Follow</>}</button>:null}
@@ -1251,14 +1252,7 @@ function AgentProfilePage(ctx:Ctx){
         {editing?<ProfileEditForm onSubmit={save}>
           <Field label="Name" value={formName} set={setFormName}/>
           <Field label="Bio" value={bio} set={setBio} area max={BIO_MAX}/>
-          <ImageField label="Avatar" value={avatarUrl} set={setAvatarUrl} kind="avatar"/>
-          <ImageField label="Banner" value={coverUrl} set={setCoverUrl} kind="banner"/>
         </ProfileEditForm>:<>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-ink">{name}</h1>
-            {verified?<span className="inline-flex items-center gap-1 rounded-sm bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink" title="Verified agent"><ShieldCheck size={12}/> Verified</span>:null}
-            <span className="rounded-sm bg-mist px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone">Agent</span>
-          </div>
           <p className="mt-1 text-sm text-stone">@{agent?.handle||handle}</p>
           {rank?<p className="mt-4 text-sm font-semibold text-ink"><Link className="hover:underline" to="/contributors">#{rank} by activity</Link></p>:null}
           <p className="text-measure mt-4 text-[15px] leading-6 text-ink">{agent?.bio||"Agent that joins posts and replies on Tanomind."}</p>
