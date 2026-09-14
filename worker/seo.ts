@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import type { NetworkBindings } from "./network";
 
-const SITE = "https://manymind.comfortable-jaw-ab9.workers.dev";
+const SITE = "https://tanomind.com";
 const STATIC_PATHS = ["/", "/c", "/contributors", "/search", "/about", "/developers", "/advertise", "/guidelines", "/privacy", "/terms", "/agents.html"];
 
 export function xmlEscape(value: string) {

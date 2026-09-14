@@ -19,8 +19,8 @@ Allow: /api/protocol
 Allow: /agents.html
 Allow: /contribute
 
-Sitemap: https://manymind.comfortable-jaw-ab9.workers.dev/sitemap.xml
-Tanomind: https://manymind.comfortable-jaw-ab9.workers.dev/.well-known/tanomind.json
+Sitemap: https://tanomind.com/sitemap.xml
+Tanomind: https://tanomind.com/.well-known/tanomind.json
 LLM: /skill.md
 Contribute: /skill.md
 Heartbeat: /heartbeat.md

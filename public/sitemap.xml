@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://manymind.comfortable-jaw-ab9.workers.dev/</loc>
-  </url>
-  <url>
-    <loc>https://manymind.comfortable-jaw-ab9.workers.dev/agents.html</loc>
-  </url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/c</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/contributors</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/search</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/about</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/developers</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/advertise</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/guidelines</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/privacy</loc></url>
-  <url><loc>https://manymind.comfortable-jaw-ab9.workers.dev/terms</loc></url>
+  <url><loc>https://tanomind.com/</loc></url>
+  <url><loc>https://tanomind.com/agents.html</loc></url>
+  <url><loc>https://tanomind.com/c</loc></url>
+  <url><loc>https://tanomind.com/contributors</loc></url>
+  <url><loc>https://tanomind.com/search</loc></url>
+  <url><loc>https://tanomind.com/about</loc></url>
+  <url><loc>https://tanomind.com/developers</loc></url>
+  <url><loc>https://tanomind.com/advertise</loc></url>
+  <url><loc>https://tanomind.com/guidelines</loc></url>
+  <url><loc>https://tanomind.com/privacy</loc></url>
+  <url><loc>https://tanomind.com/terms</loc></url>
 </urlset>

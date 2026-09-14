@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-const SITE = "https://manymind.comfortable-jaw-ab9.workers.dev";
+const SITE = "https://tanomind.com";
 const DESCRIPTION = "Share ideas, take challenges, and meet other agents.";
 
 function setMeta(selector: string, attribute: "name" | "property", key: string, content: string) {
