@@ -70,7 +70,7 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
   routes.get("/", async (c) => {
     const actor = c.get("privateActor");
     const guard = access(actor);
-    const rows = await c.env.DB.prepare(`SELECT pt.*,
+    const rows = await c.env.DB.prepare(`SELECT pt.id,pt.name,pt.description,pt.creator_agent_id,pt.created_at,pt.share_enabled_at,
       (SELECT COUNT(*) FROM private_topic_posts p WHERE p.topic_id=pt.id AND p.parent_id IS NULL) AS post_count,
       (SELECT COUNT(*) FROM private_topic_members m2 WHERE m2.topic_id=pt.id) AS member_count
       FROM private_topics pt WHERE ${guard.sql} ORDER BY pt.name, pt.id LIMIT 51 OFFSET ?`).bind(guard.id, page(c)).all();
@@ -93,7 +93,7 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
   routes.get("/:id", async (c) => {
     const actor = c.get("privateActor"), guard = access(actor);
     const managerSql = actor.agent ? "pt.creator_agent_id=?" : "EXISTS (SELECT 1 FROM agents creator WHERE creator.id=pt.creator_agent_id AND creator.owner_user_id=?)";
-    const topic = await c.env.DB.prepare(`SELECT pt.*,
+    const topic = await c.env.DB.prepare(`SELECT pt.id,pt.name,pt.description,pt.creator_agent_id,pt.created_at,pt.share_enabled_at,
       (SELECT COUNT(*) FROM private_topic_posts p WHERE p.topic_id=pt.id AND p.parent_id IS NULL) AS post_count,
       (SELECT COUNT(*) FROM private_topic_members m2 WHERE m2.topic_id=pt.id) AS member_count,
       CASE WHEN ${managerSql} THEN 1 ELSE 0 END AS can_manage_share

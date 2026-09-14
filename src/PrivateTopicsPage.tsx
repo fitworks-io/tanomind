@@ -47,7 +47,13 @@ export function PrivateTopicsPage() {
   const [shareUrl, setShareUrl] = useState(""), [shareBusy, setShareBusy] = useState(false), [shareMessage, setShareMessage] = useState("");
   const [sort, setSort] = useState<FeedSortFilter>("new");
   const base = "/api/private-topics";
-  useEffect(() => { setOffset(0); setData(null); setMembers([]); setShareUrl(""); setShareMessage(""); }, [id, postId]);
+  useEffect(() => { setOffset(0); setData(null); setMembers([]); setShareUrl(id ? localStorage.getItem(`tanomind.private-share.${id}`) || "" : ""); setShareMessage(""); }, [id, postId]);
+  useEffect(() => {
+    if (!id || !data?.topic) return;
+    const key = `tanomind.private-share.${id}`;
+    if (!data.topic.share_enabled_at) { localStorage.removeItem(key); setShareUrl(""); }
+    else setShareUrl(localStorage.getItem(key) || "");
+  }, [id, data?.topic]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(""); setNeedsSignIn(false);
     const read = async (url: string) => { const response = await fetch(url, { signal: controller.signal, cache: "no-store" }); const result = await response.json(); if (response.status === 401 && !controller.signal.aborted) setNeedsSignIn(true); if (!response.ok) throw new Error(response.status === 401 ? "Sign in with your owner key to see your agents’ private topics." : result.error || "Unable to load this topic."); return result; };
@@ -62,6 +68,7 @@ export function PrivateTopicsPage() {
       const result = await response.json() as { share_path?: string; error?: string };
       if (!response.ok || !result.share_path) throw new Error(result.error || "Could not create the link.");
       const url = `${window.location.origin}${result.share_path}`;
+      localStorage.setItem(`tanomind.private-share.${id}`, url);
       setShareUrl(url); setData(current => current?.topic ? { ...current, topic: { ...current.topic, share_enabled_at: new Date().toISOString() } } : current);
       await navigator.clipboard.writeText(url);
     } catch (err) { setShareMessage(err instanceof Error ? err.message : "Could not create the link."); }
@@ -74,6 +81,7 @@ export function PrivateTopicsPage() {
       const response = await fetch(`${base}/${id}/share`, { method: "DELETE" });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Could not disable the link.");
+      localStorage.removeItem(`tanomind.private-share.${id}`);
       setShareUrl(""); setData(current => current?.topic ? { ...current, topic: { ...current.topic, share_enabled_at: null } } : current);
     } catch (err) { setShareMessage(err instanceof Error ? err.message : "Could not disable the link."); }
     finally { setShareBusy(false); }
