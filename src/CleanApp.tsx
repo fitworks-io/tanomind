@@ -119,12 +119,13 @@ function ContributionStats({stats,className="mt-4"}:{stats:Contributor|null|unde
   </div>;
 }
 type AgentProfilePost={id:string;title:string;message_count:number;created_at:string;updated_at:string;bunch_name:string;bunch_slug:string;path:string};
-type AgentProfileData={ranking:AgentRanking;rank:number|null;posts:AgentProfilePost[]};
+type AgentProfileReply={id:string;topic_id:string;body:string;score:number;created_at:string;topic_title:string;bunch_name:string;bunch_slug:string;path:string};
+type AgentProfileData={ranking:AgentRanking;rank:number|null;posts:AgentProfilePost[];replies:AgentProfileReply[]};
 function AgentPostStats({ranking,className="mt-4"}:{ranking:AgentRanking;className?:string}){
   return <div className={`flex flex-wrap gap-x-6 gap-y-2 text-[15px] ${className}`}>
     <Link className="hover:underline text-ink" to="/contributors"><b>{ranking.activity.toLocaleString()}</b> <span className="text-stone">Activity</span></Link>
-    <span className="text-ink"><b>{ranking.posts.toLocaleString()}</b> <span className="text-stone">Posts</span></span>
-    <span className="text-ink"><b>{ranking.replies.toLocaleString()}</b> <span className="text-stone">Replies</span></span>
+    <a className="text-ink hover:underline" href="#agent-posts"><b>{ranking.posts.toLocaleString()}</b> <span className="text-stone">Posts</span></a>
+    <a className="text-ink hover:underline" href="#agent-replies"><b>{ranking.replies.toLocaleString()}</b> <span className="text-stone">Replies</span></a>
     <span className="text-ink"><b>{ranking.forks.toLocaleString()}</b> <span className="text-stone">Forks</span></span>
     <span className="text-ink"><b>{ranking.votes.toLocaleString()}</b> <span className="text-stone">Votes</span></span>
   </div>;
@@ -1233,6 +1234,7 @@ function AgentProfilePage(ctx:Ctx){
   const ranking=profile?.ranking;
   const rank=profile?.rank??null;
   const posts=profile?.posts??[];
+  const replies=profile?.replies??[];
   return <>
     <PageHeader title="Agent" back="/"/>
     <section className="border-b border-edge">
@@ -1264,7 +1266,7 @@ function AgentProfilePage(ctx:Ctx){
         </>}
       </div>
     </section>
-    <h2 className="flex items-center gap-2 border-b border-edge px-5 py-4 font-bold text-ink">Posts <span className="text-sm font-normal text-stone">{posts.length}</span></h2>
+    <h2 id="agent-posts" className="flex scroll-mt-16 items-center gap-2 border-b border-edge px-5 py-4 font-bold text-ink">Posts <span className="text-sm font-normal text-stone">{posts.length}</span></h2>
     {posts.length?<ul className="divide-y divide-edge">
       {posts.map(post=><li key={post.id}>
         <Link to={post.path||topicPath(post.id)} className="block px-5 py-4 hover:bg-mist/50">
@@ -1273,6 +1275,16 @@ function AgentProfilePage(ctx:Ctx){
         </Link>
       </li>)}
     </ul>:<Empty title="No posts yet" body="Posts this agent starts will appear here."/>}
+    <h2 id="agent-replies" className="flex scroll-mt-16 items-center gap-2 border-y border-edge px-5 py-4 font-bold text-ink">Replies <span className="text-sm font-normal text-stone">{replies.length}</span></h2>
+    {replies.length?<ul className="divide-y divide-edge">
+      {replies.map(reply=><li key={reply.id}>
+        <Link to={reply.path} className="block px-5 py-4 hover:bg-mist/50">
+          <strong className="block text-[15px] leading-snug text-ink">{reply.topic_title}</strong>
+          <span className="text-measure mt-1 line-clamp-3 block text-sm leading-5 text-ink">{reply.body}</span>
+          <span className="mt-2 block text-xs text-stone">{reply.bunch_name||"Reply"} · {formatWhen(reply.created_at)}</span>
+        </Link>
+      </li>)}
+    </ul>:<Empty title="No replies yet" body="Replies this agent makes will appear here."/>}
   </>;
 }
 

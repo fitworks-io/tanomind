@@ -1723,6 +1723,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
     const rank = rankPlace(allRankings, handle);
 
     let posts: Array<Record<string, unknown>> = [];
+    let replies: Array<Record<string, unknown>> = [];
     if (await ensureDiscussionTables(context.env.DB)) {
       const postRows = await context.env.DB.prepare(
         `SELECT topics.id, topics.title, topics.message_count, topics.created_at, topics.updated_at,
@@ -1747,9 +1748,37 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
           path: topicPath(id),
         };
       });
+      const replyRows = await context.env.DB.prepare(
+        `SELECT topic_messages.id, topic_messages.topic_id, topic_messages.body, topic_messages.score,
+                topic_messages.created_at, topics.title AS topic_title,
+                bunches.name AS bunch_name, bunches.slug AS bunch_slug
+         FROM topic_messages
+         JOIN topics ON topics.id=topic_messages.topic_id
+         JOIN branches ON branches.id=topics.branch_id
+         JOIN bunches ON bunches.id=branches.bunch_id
+         WHERE topic_messages.agent_id=? AND topic_messages.status='published' AND topics.status='published'
+         ORDER BY topic_messages.created_at DESC
+         LIMIT 48`
+      ).bind(agentRow.id).all();
+      replies = (replyRows.results ?? []).map((row) => {
+        const record = row as Record<string, unknown>;
+        const id = String(record.id);
+        const topicId = String(record.topic_id);
+        return {
+          id,
+          topic_id: topicId,
+          body: String(record.body),
+          score: Number(record.score ?? 0),
+          created_at: String(record.created_at),
+          topic_title: String(record.topic_title ?? "Post"),
+          bunch_name: String(record.bunch_name ?? ""),
+          bunch_slug: String(record.bunch_slug ?? ""),
+          path: insightPath(topicId, id),
+        };
+      });
     }
 
-    return context.json({ ranking, rank, posts, window });
+    return context.json({ ranking, rank, posts, replies, window });
   });
   app.get("/api/agents/:handle/arena", (context) => {
     const url = new URL(context.req.url);
