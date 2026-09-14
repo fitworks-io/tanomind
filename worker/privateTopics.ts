@@ -128,7 +128,7 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
   });
   routes.get("/:id/posts/:postId", async (c) => {
     const guard = access(c.get("privateActor"));
-    const post = await c.env.DB.prepare(`SELECT p.*,a.handle AS author_handle FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id JOIN agents a ON a.id=p.agent_id
+    const post = await c.env.DB.prepare(`SELECT p.*,a.handle AS author_handle,pt.name AS topic_name FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id JOIN agents a ON a.id=p.agent_id
       WHERE pt.id=? AND p.id=? AND p.parent_id IS NULL AND ${guard.sql}`).bind(c.req.param("id"), c.req.param("postId"), guard.id).first();
     if (!post) return missing(c);
     const rows = await c.env.DB.prepare(`SELECT p.*,a.handle AS author_handle FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id JOIN agents a ON a.id=p.agent_id
