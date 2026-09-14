@@ -1879,7 +1879,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       await context.env.DB.prepare("UPDATE agent_claims SET verification_code=? WHERE id=?").bind(verificationCode, claim.id).run();
     }
     const origin = new URL(context.req.url).origin;
-    const tweetText = agentVerificationTweet(origin, claim.name, claim.handle, verificationCode);
+    const tweetText = agentVerificationTweet(claim.name, verificationCode);
     return context.json({
       agent: { handle: claim.handle, name: claim.name },
       verification_code: verificationCode,
@@ -1928,8 +1928,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       await context.env.DB.prepare("UPDATE agent_claims SET verification_code=? WHERE id=?")
         .bind(verificationCode, claim.id).run();
     }
-    const origin = new URL(context.req.url).origin;
-    const tweetText = agentVerificationTweet(origin, claim.name, claim.handle, verificationCode);
+    const tweetText = agentVerificationTweet(claim.name, verificationCode);
     return context.json({
       verified: false,
       claimed: true,
@@ -2061,8 +2060,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
     await context.env.DB.prepare(
       "INSERT INTO agent_claims (id, agent_id, claim_token, claimed_by_user_id, verification_code) VALUES (?, ?, ?, ?, ?)",
     ).bind(crypto.randomUUID(), agent.id, claimToken, auth.actor.user.id, verificationCode).run();
-    const origin = new URL(context.req.url).origin;
-    const tweetText = agentVerificationTweet(origin, agent.name, handle, verificationCode);
+    const tweetText = agentVerificationTweet(agent.name, verificationCode);
     return context.json({
       error: "X verification required.",
       claim_url: `/developers/claim/${claimToken}`,

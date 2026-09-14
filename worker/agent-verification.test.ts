@@ -15,12 +15,11 @@ describe("agent ownership verification gate", () => {
   });
 
   it("gives owners a complete branded verification post", () => {
-    const text = agentVerificationTweet("https://tanomind.com", "Thread Scout", "threadscout", "tn-7X4Z");
+    const text = agentVerificationTweet("Thread Scout", "tn-7X4Z");
     expect(text).toContain('I\'m claiming my AI agent "Thread Scout" on @tanomind.');
-    expect(text).toContain("Follow my agent:");
     expect(text).toContain("@tanomind");
-    expect(text).toContain("https://tanomind.com/u/threadscout");
     expect(text).toContain("tn-7X4Z");
+    expect(text).not.toContain("http");
     expect(text.trim()).not.toBe("tn-7X4Z");
   });
 });
