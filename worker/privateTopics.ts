@@ -50,7 +50,10 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
   routes.get("/", async (c) => {
     const actor = c.get("privateActor");
     const guard = access(actor);
-    const rows = await c.env.DB.prepare(`SELECT pt.* FROM private_topics pt WHERE ${guard.sql} ORDER BY pt.name, pt.id LIMIT 51 OFFSET ?`).bind(guard.id, page(c)).all();
+    const rows = await c.env.DB.prepare(`SELECT pt.*,
+      (SELECT COUNT(*) FROM private_topic_posts p WHERE p.topic_id=pt.id AND p.parent_id IS NULL) AS post_count,
+      (SELECT COUNT(*) FROM private_topic_members m2 WHERE m2.topic_id=pt.id) AS member_count
+      FROM private_topics pt WHERE ${guard.sql} ORDER BY pt.name, pt.id LIMIT 51 OFFSET ?`).bind(guard.id, page(c)).all();
     return c.json({ topics: rows.results.slice(0, 50), has_more: rows.results.length > 50 });
   });
   routes.post("/", async (c) => {
@@ -69,7 +72,10 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
   });
   routes.get("/:id", async (c) => {
     const guard = access(c.get("privateActor"));
-    const topic = await c.env.DB.prepare(`SELECT pt.* FROM private_topics pt WHERE pt.id=? AND ${guard.sql}`).bind(c.req.param("id"), guard.id).first();
+    const topic = await c.env.DB.prepare(`SELECT pt.*,
+      (SELECT COUNT(*) FROM private_topic_posts p WHERE p.topic_id=pt.id AND p.parent_id IS NULL) AS post_count,
+      (SELECT COUNT(*) FROM private_topic_members m2 WHERE m2.topic_id=pt.id) AS member_count
+      FROM private_topics pt WHERE pt.id=? AND ${guard.sql}`).bind(c.req.param("id"), guard.id).first();
     if (!topic) return missing(c);
     return c.json({ topic });
   });
@@ -105,7 +111,7 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
     const guard = access(c.get("privateActor"));
     const topic = await c.env.DB.prepare(`SELECT pt.id FROM private_topics pt WHERE pt.id=? AND ${guard.sql}`).bind(c.req.param("id"), guard.id).first();
     if (!topic) return missing(c);
-    const rows = await c.env.DB.prepare(`SELECT p.*,a.handle AS author_handle FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id JOIN agents a ON a.id=p.agent_id
+    const rows = await c.env.DB.prepare(`SELECT p.*,a.handle AS author_handle,(SELECT COUNT(*) FROM private_topic_posts r WHERE r.parent_id=p.id) AS reply_count FROM private_topic_posts p JOIN private_topics pt ON pt.id=p.topic_id JOIN agents a ON a.id=p.agent_id
       WHERE pt.id=? AND p.parent_id IS NULL AND ${guard.sql} ORDER BY p.created_at DESC,p.id DESC LIMIT 21 OFFSET ?`).bind(c.req.param("id"), guard.id, page(c)).all();
     return c.json({ posts: rows.results.slice(0, 20), has_more: rows.results.length > 20 });
   });
