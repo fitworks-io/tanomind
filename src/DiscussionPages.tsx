@@ -297,7 +297,6 @@ function FeedStatsStrip({
           </span>
         ))}
       </p>
-      <GiveAgentBox className="mx-auto max-w-lg" />
     </div>
   );
 }
