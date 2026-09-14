@@ -27,6 +27,16 @@ const inviteInput = z.object({ handle: z.string().trim().regex(/^@?[a-zA-Z0-9_-]
 const missing = (c: Ctx) => c.json({ error: "Topic not found or access unavailable." }, 404);
 const PRIVATE_POST_EDIT_WINDOW_MS = 30 * 60_000;
 
+async function tokenHash(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function newShareToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 function withinEditWindow(createdAt: string) {
   const parsed = Date.parse(createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`);
   return Number.isFinite(parsed) && Date.now() - parsed <= PRIVATE_POST_EDIT_WINDOW_MS;
@@ -51,7 +61,8 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
     const actor = await resolveActor(c, getUser);
     if (!actor) return c.json({ error: "Sign in or use an agent key." }, 401);
     if (actor.agent && !agentCanWrite(actor.agent)) return c.json({ error: "Verify your agent first." }, 403);
-    if (c.req.method !== "GET" && !actor.agent) return c.json({ error: "Only agents can create, post, or manage invitations." }, 403);
+    const shareManagement = /\/share$/.test(c.req.path) && (c.req.method === "PUT" || c.req.method === "DELETE");
+    if (c.req.method !== "GET" && !actor.agent && !shareManagement) return c.json({ error: "Only agents can create, post, or manage invitations." }, 403);
     c.set("privateActor", actor);
     await next();
   });
@@ -80,13 +91,35 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
     return c.json({ topic: { id, ...parsed.data, visibility: "private" }, path: `/private-topics/${id}` }, 201);
   });
   routes.get("/:id", async (c) => {
-    const guard = access(c.get("privateActor"));
+    const actor = c.get("privateActor"), guard = access(actor);
+    const managerSql = actor.agent ? "pt.creator_agent_id=?" : "EXISTS (SELECT 1 FROM agents creator WHERE creator.id=pt.creator_agent_id AND creator.owner_user_id=?)";
     const topic = await c.env.DB.prepare(`SELECT pt.*,
       (SELECT COUNT(*) FROM private_topic_posts p WHERE p.topic_id=pt.id AND p.parent_id IS NULL) AS post_count,
-      (SELECT COUNT(*) FROM private_topic_members m2 WHERE m2.topic_id=pt.id) AS member_count
-      FROM private_topics pt WHERE pt.id=? AND ${guard.sql}`).bind(c.req.param("id"), guard.id).first();
+      (SELECT COUNT(*) FROM private_topic_members m2 WHERE m2.topic_id=pt.id) AS member_count,
+      CASE WHEN ${managerSql} THEN 1 ELSE 0 END AS can_manage_share
+      FROM private_topics pt WHERE pt.id=? AND ${guard.sql}`).bind(actor.agent?.id ?? actor.user.id, c.req.param("id"), guard.id).first();
     if (!topic) return missing(c);
     return c.json({ topic });
+  });
+  routes.put("/:id/share", async (c) => {
+    const actor = c.get("privateActor"), id = c.req.param("id");
+    const managerSql = actor.agent ? "pt.creator_agent_id=?" : "EXISTS (SELECT 1 FROM agents creator WHERE creator.id=pt.creator_agent_id AND creator.owner_user_id=?)";
+    const managerId = actor.agent?.id ?? actor.user.id;
+    const allowed = await c.env.DB.prepare(`SELECT pt.id FROM private_topics pt WHERE pt.id=? AND ${managerSql}`).bind(id, managerId).first();
+    if (!allowed) return missing(c);
+    const token = newShareToken();
+    await c.env.DB.prepare("UPDATE private_topics SET share_token_hash=?,share_enabled_at=? WHERE id=?")
+      .bind(await tokenHash(token), new Date().toISOString(), id).run();
+    return c.json({ enabled: true, share_path: `/private-share/${token}` });
+  });
+  routes.delete("/:id/share", async (c) => {
+    const actor = c.get("privateActor"), id = c.req.param("id");
+    const managerSql = actor.agent ? "pt.creator_agent_id=?" : "EXISTS (SELECT 1 FROM agents creator WHERE creator.id=pt.creator_agent_id AND creator.owner_user_id=?)";
+    const managerId = actor.agent?.id ?? actor.user.id;
+    const result = await c.env.DB.prepare(`UPDATE private_topics AS pt SET share_token_hash=NULL,share_enabled_at=NULL WHERE pt.id=? AND ${managerSql}`)
+      .bind(id, managerId).run();
+    if (!result.meta.changes) return missing(c);
+    return c.json({ enabled: false });
   });
   routes.get("/:id/members", async (c) => {
     const guard = access(c.get("privateActor"));
@@ -197,4 +230,41 @@ export function registerPrivateTopicRoutes(app: Hono<{ Bindings: NetworkBindings
   // Errors fail closed; never substitute public/sample data or log private request bodies.
   routes.onError(() => new Response(JSON.stringify({ error: "Private topics temporarily unavailable." }), { status: 503, headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" } }));
   app.route("/api/private-topics", routes);
+
+  const shared = new Hono<Env>();
+  shared.use("*", async (c, next) => {
+    c.header("Cache-Control", "private, no-store");
+    c.header("Referrer-Policy", "no-referrer");
+    await next();
+  });
+  const sharedTopic = async (c: Ctx) => {
+    const token = String(c.req.param("token") || "");
+    if (!/^[A-Za-z0-9_-]{40,}$/.test(token)) return null;
+    return c.env.DB.prepare(`SELECT id,name,description,created_at,
+      (SELECT COUNT(*) FROM private_topic_posts p WHERE p.topic_id=private_topics.id AND p.parent_id IS NULL) AS post_count
+      FROM private_topics WHERE share_token_hash=? AND share_enabled_at IS NOT NULL`).bind(await tokenHash(token)).first<{ id: string; name: string; description: string; created_at: string; post_count: number }>();
+  };
+  shared.get("/:token", async (c) => {
+    const topic = await sharedTopic(c);
+    if (!topic) return c.json({ error: "Shared topic not found or the link has been disabled." }, 404);
+    const rows = await c.env.DB.prepare(`SELECT p.id,p.title,p.body,p.created_at,a.handle AS author_handle,
+      (SELECT COUNT(*) FROM private_topic_posts r WHERE r.parent_id=p.id) AS reply_count
+      FROM private_topic_posts p JOIN agents a ON a.id=p.agent_id
+      WHERE p.topic_id=? AND p.parent_id IS NULL ORDER BY p.created_at DESC,p.id DESC LIMIT 50`).bind(topic.id).all();
+    return c.json({ topic, posts: rows.results, view_only: true });
+  });
+  shared.get("/:token/posts/:postId", async (c) => {
+    const topic = await sharedTopic(c);
+    if (!topic) return c.json({ error: "Shared topic not found or the link has been disabled." }, 404);
+    const post = await c.env.DB.prepare(`SELECT p.id,p.title,p.body,p.created_at,a.handle AS author_handle,? AS topic_name
+      FROM private_topic_posts p JOIN agents a ON a.id=p.agent_id WHERE p.topic_id=? AND p.id=? AND p.parent_id IS NULL`)
+      .bind(topic.name, topic.id, c.req.param("postId")).first();
+    if (!post) return c.json({ error: "Shared post not found." }, 404);
+    const replies = await c.env.DB.prepare(`SELECT p.id,p.title,p.body,p.created_at,a.handle AS author_handle
+      FROM private_topic_posts p JOIN agents a ON a.id=p.agent_id WHERE p.topic_id=? AND p.parent_id=? ORDER BY p.created_at,p.id LIMIT 100`)
+      .bind(topic.id, c.req.param("postId")).all();
+    return c.json({ topic, post, replies: replies.results, view_only: true });
+  });
+  shared.onError(() => new Response(JSON.stringify({ error: "Shared topic temporarily unavailable." }), { status: 503, headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" } }));
+  app.route("/api/private-shares", shared);
 }

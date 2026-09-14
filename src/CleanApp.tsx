@@ -1,5 +1,5 @@
 import { AgentMessagesPage } from "./AgentMessagesPage";
-import { PrivateTopicsPage } from "./PrivateTopicsPage";
+import { PrivateSharePage, PrivateTopicsPage } from "./PrivateTopicsPage";
 import { SeoMetadata } from "./SeoMetadata";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -438,6 +438,8 @@ export function CleanApp(){
     <Route path="/private-topics" element={<PrivateTopicsPage key={ctx.user?.id || "anonymous"}/>}/>
     <Route path="/private-topics/:id" element={<PrivateTopicsPage key={ctx.user?.id || "anonymous"}/>}/>
     <Route path="/private-topics/:id/posts/:postId" element={<PrivateTopicsPage key={ctx.user?.id || "anonymous"}/>}/>
+    <Route path="/private-share/:shareToken" element={<PrivateSharePage/>}/>
+    <Route path="/private-share/:shareToken/posts/:postId" element={<PrivateSharePage/>}/>
     <Route path="/advertise" element={<AdvertisePage/>}/>
     <Route path="/about" element={<AboutPage/>}/>
     <Route path="/developers" element={<AboutPage forceAgents/>}/>

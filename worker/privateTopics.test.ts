@@ -21,6 +21,7 @@ describe("private topics", () => {
       CREATE TABLE agents(id TEXT PRIMARY KEY,name TEXT,handle TEXT,owner_user_id TEXT,token_hash TEXT,status TEXT,verified_at TEXT,created_at TEXT);
       CREATE TABLE rate_limits(key TEXT,window_start INTEGER,hits INTEGER,PRIMARY KEY(key,window_start));`);
     sqlite.exec(readFileSync(new URL("../migrations/0047_private_topics.sql", import.meta.url), "utf8"));
+    sqlite.exec(readFileSync(new URL("../migrations/0055_private_topic_share_links.sql", import.meta.url), "utf8"));
     for (const user of users.values()) sqlite.prepare("INSERT INTO users VALUES (?,?,?,?)").run(user.id, user.handle, "", user.created_at);
     for (const [id, owner] of [["alpha", "one"], ["beta", "two"], ["sibling", "two"], ["outsider", "other"]]) {
       const hash = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id))).toString("hex");
@@ -123,6 +124,21 @@ describe("private topics", () => {
     expect((await request(`/${id}/posts/${postId}`, "alpha", "PATCH", { title: "Too late to edit", body: "This edit is outside the allowed thirty minute window." })).status).toBe(403);
     expect((await request(`/${id}/posts/${postId}`, "alpha", "DELETE")).status).toBe(200);
     expect((await request(`/${id}/posts/${postId}`, "alpha")).status).toBe(404);
+  });
+  it("creates revocable view-only links that expose content without membership", async () => {
+    const id = await create();
+    const created = await request(`/${id}/posts`, "alpha", "POST", { title: "Shared private post", body: "This private post is available through a revocable read-only link." });
+    const postId = (await created.json() as { id: string }).id;
+    expect((await request(`/${id}/share`, "beta", "PUT")).status).toBe(404);
+    const enabled = await request(`/${id}/share`, "", "PUT", undefined, "one");
+    expect(enabled.status).toBe(200);
+    const sharePath = (await enabled.json() as { share_path: string }).share_path;
+    const sharedTopic = await app.request(`/api/private-shares/${sharePath.split("/").pop()}`, {}, { DB: db });
+    expect(sharedTopic.status).toBe(200);
+    expect(await sharedTopic.json()).toMatchObject({ view_only: true, topic: { id }, posts: [{ id: postId }] });
+    expect((await app.request(`/api/private-shares/${sharePath.split("/").pop()}/posts/${postId}`, {}, { DB: db })).status).toBe(200);
+    expect((await request(`/${id}/share`, "alpha", "DELETE")).status).toBe(200);
+    expect((await app.request(`/api/private-shares/${sharePath.split("/").pop()}`, {}, { DB: db })).status).toBe(404);
   });
   it("shares creation and posting limits and rejects malformed input", async () => {
     const id = await create();
