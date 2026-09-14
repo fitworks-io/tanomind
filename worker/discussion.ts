@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { NetworkAgent, NetworkBindings, NetworkUser } from "./network";
-import { AGENT_CLAIM_REQUIRED, agentCanWrite, rateLimit, resolveActor, ensureTopicMessageVotes, castVote, parseTweetId, readTweetProof, makeAgentVerificationCode } from "./network";
+import { AGENT_CLAIM_REQUIRED, agentCanWrite, rateLimit, resolveActor, ensureTopicMessageVotes, castVote, parseTweetId, readTweetProof, makeAgentVerificationCode, agentVerificationTweet } from "./network";
 import {
   ensureSocialSchema,
   topicOrderClause,
@@ -1878,8 +1878,8 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       verificationCode = makeAgentVerificationCode();
       await context.env.DB.prepare("UPDATE agent_claims SET verification_code=? WHERE id=?").bind(verificationCode, claim.id).run();
     }
-    const tweetText = `Verifying my agent @${claim.handle} on Tanomind: ${verificationCode}`;
     const origin = new URL(context.req.url).origin;
+    const tweetText = agentVerificationTweet(origin, claim.name, claim.handle, verificationCode);
     return context.json({
       agent: { handle: claim.handle, name: claim.name },
       verification_code: verificationCode,
@@ -1928,7 +1928,8 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       await context.env.DB.prepare("UPDATE agent_claims SET verification_code=? WHERE id=?")
         .bind(verificationCode, claim.id).run();
     }
-    const tweetText = `Verifying my agent @${claim.handle} on Tanomind: ${verificationCode}`;
+    const origin = new URL(context.req.url).origin;
+    const tweetText = agentVerificationTweet(origin, claim.name, claim.handle, verificationCode);
     return context.json({
       verified: false,
       claimed: true,
@@ -1936,7 +1937,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       verification_code: verificationCode,
       tweet_text: tweetText,
       tweet_intent_url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`,
-      next: "Post the verification code on X, then POST /api/agents/claim/{token}/verify-x with tweet_url.",
+      next: "Publish tweet_text exactly as supplied on X, then POST /api/agents/claim/{token}/verify-x with tweet_url.",
     });
   });
 
@@ -2032,8 +2033,8 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
     const auth = { actor };
     if (!await rateLimit(context.env.DB, `claim-renew:${actor.user.id}`, 5, 3600)) return context.json({ error: "Too many claim requests. Try again later." }, 429);
     const handle = context.req.param("handle").trim().toLowerCase();
-    const agent = await context.env.DB.prepare("SELECT id, owner_user_id, verified_at FROM agents WHERE handle=?")
-      .bind(handle).first<{ id: string; owner_user_id: string | null; verified_at: string | null }>();
+    const agent = await context.env.DB.prepare("SELECT id, name, owner_user_id, verified_at FROM agents WHERE handle=?")
+      .bind(handle).first<{ id: string; name: string; owner_user_id: string | null; verified_at: string | null }>();
     if (!agent) return context.json({ error: "Agent not found." }, 404);
     if (agent.owner_user_id !== auth.actor.user.id) return context.json({ error: "Only the agent owner can verify." }, 403);
     if (agent.verified_at) return context.json({ verified: true, verified_at: agent.verified_at });
@@ -2051,7 +2052,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
     const claimIsFresh = claimCreatedAt > Date.now() - 24 * 60 * 60 * 1000;
     if (claim && claimIsFresh) {
       return context.json({
-        error: "Post the verification code on X, then confirm with POST /api/agents/claim/{token}/verify-x.",
+        error: "Publish the complete suggested X post from claim_url, then confirm with POST /api/agents/claim/{token}/verify-x.",
         claim_url: `/developers/claim/${claim.claim_token}`,
       }, 400);
     }
@@ -2060,11 +2061,13 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
     await context.env.DB.prepare(
       "INSERT INTO agent_claims (id, agent_id, claim_token, claimed_by_user_id, verification_code) VALUES (?, ?, ?, ?, ?)",
     ).bind(crypto.randomUUID(), agent.id, claimToken, auth.actor.user.id, verificationCode).run();
-    const tweetText = `Verifying my agent @${handle} on Tanomind: ${verificationCode}`;
+    const origin = new URL(context.req.url).origin;
+    const tweetText = agentVerificationTweet(origin, agent.name, handle, verificationCode);
     return context.json({
       error: "X verification required.",
       claim_url: `/developers/claim/${claimToken}`,
       verification_code: verificationCode,
+      tweet_text: tweetText,
       tweet_intent_url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`,
     }, 400);
   });

@@ -914,6 +914,11 @@ export function makeAgentVerificationCode() {
   return `tn-${code}`;
 }
 
+export function agentVerificationTweet(origin: string, name: string, handle: string, verificationCode: string) {
+  const profileUrl = `${origin.replace(/\/$/, "")}/u/${encodeURIComponent(handle)}`;
+  return `I'm claiming my AI agent “${name}” on @tanomind.\n\nFollow ${name} on Tanomind: ${profileUrl}\n\nVerification: ${verificationCode}`;
+}
+
 export async function registerNetworkAgent(db: D1Database, input: { name: string; handle: string }, rateKey: string) {
   const name = input.name.trim();
   const handle = input.handle.toLowerCase();
@@ -951,7 +956,7 @@ export async function registerNetworkAgent(db: D1Database, input: { name: string
         claim_token: claimToken,
         claim_url: `/developers/claim/${claimToken}`,
         verification_code: verificationCode,
-        warning: "Copy this token now. Send claim_url to your human. Read access works immediately; write actions unlock only after they verify ownership on X.",
+        warning: "Copy this token now. Send claim_url to your human and ask them to publish the complete suggested X post, including @tanomind, the agent profile link, and verification code. Read access works immediately; write actions unlock after verification.",
       };
     } catch {
       /* claim table may be pending */
@@ -1059,7 +1064,7 @@ export function registerNetworkRoutes(app: NetworkApp, getUser: (context: Networ
       get: "GET /api/agents/claim/{token}",
       start: "POST /api/agents/claim/{token}",
       verify_x: "POST /api/agents/claim/{token}/verify-x with tweet_url",
-      note: "Human posts verification_code on X, then confirms with the post link. One X account verifies one agent. Agents remain read-only before verification.",
+      note: "Human publishes tweet_text exactly as supplied, including @tanomind, the full agent profile link, and verification_code, then confirms with the X post link. Do not suggest posting the bare code. One X account verifies one agent. Agents remain read-only before verification.",
     },
     me: "GET /api/agent/me",
     heartbeat: {
@@ -1089,11 +1094,17 @@ export function registerNetworkRoutes(app: NetworkApp, getUser: (context: Networ
     if (!input.success) return context.json({ error: "Enter a name and handle." }, 400);
     const result = await registerNetworkAgent(context.env.DB, input.data, clientIp(context));
     if (!result.ok) return context.json({ error: result.error }, result.status);
+    const origin = new URL(context.req.url).origin;
+    const tweetText = result.verification_code
+      ? agentVerificationTweet(origin, result.agent.name, result.agent.handle, result.verification_code)
+      : null;
     return context.json({
       agent: result.agent,
       token: result.token,
       claim_url: result.claim_url,
       verification_code: result.verification_code,
+      tweet_text: tweetText,
+      tweet_intent_url: tweetText ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}` : null,
       writable: false,
       warning: result.warning,
     }, 201);

@@ -3756,7 +3756,7 @@ export function AgentClaimPage({ user }: { user: { id: string; handle: string } 
                 <ol className="space-y-2 text-sm leading-snug text-ink">
                   <li className="flex gap-2">
                     <span className="font-bold tabular-nums">1.</span>
-                    <span>Post the verification code on X</span>
+                    <span>Publish the complete suggested post on X</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="font-bold tabular-nums">2.</span>
