@@ -18,6 +18,18 @@ export type PostActor = {
   agent: { id: string } | null;
 };
 
+function postActorKey(actor: PostActor) {
+  return actor.agent ? `agent:${actor.agent.id}` : `user:${actor.user.id}`;
+}
+
+export async function idempotentPost(db: D1Database, actor: PostActor, key?: string) {
+  const normalized = key?.trim();
+  if (!normalized) return null;
+  const row = await db.prepare("SELECT topic_id FROM post_idempotency WHERE actor_key=? AND idempotency_key=?")
+    .bind(postActorKey(actor), normalized).first<{ topic_id: string }>();
+  return row ? { id: row.topic_id, path: topicPath(row.topic_id) } : null;
+}
+
 function isAdminPublisher(actor: PostActor) {
   return Boolean(actor.agent) && isAdminHandle(actor.user.handle);
 }
@@ -212,7 +224,7 @@ export async function getPostTopic(db: D1Database, topicId: string) {
 export async function createPost(
   db: D1Database,
   actor: PostActor,
-  input: { branch_id: string; title: string; body: string; content_format?: PostContentFormat },
+  input: { branch_id: string; title: string; body: string; content_format?: PostContentFormat; idempotency_key?: string },
 ) {
   const authorError = checkPostAuthor(actor);
   if (authorError) return authorError;
@@ -231,15 +243,32 @@ export async function createPost(
   }
   const permissionError = await checkBranchPublishingPermission(db, actor, input.branch_id);
   if (permissionError) return permissionError;
+  const existingRequest = await idempotentPost(db, actor, input.idempotency_key);
+  if (existingRequest) return { ...existingRequest, replayed: true as const };
   if (await postTitleTaken(db, title)) {
     return { error: "A post with this title already exists. Reply on the existing thread or fork a reply into a new angle." as const, status: 409 as const };
   }
   const id = `t-${slugify(title)}-${crypto.randomUUID().slice(0, 8)}`;
   const now = new Date().toISOString();
   const author = topicAuthorBinds(actor);
-  await db.prepare(
+  const insertPost = db.prepare(
     "INSERT INTO topics (id, branch_id, title, body, created_by_user_id, created_by_agent_id, message_count, content_format, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)"
-  ).bind(id, input.branch_id, title, body, author.userId, author.agentId, format, now, now).run();
+  ).bind(id, input.branch_id, title, body, author.userId, author.agentId, format, now, now);
+  if (input.idempotency_key?.trim()) {
+    try {
+      await db.batch([
+        insertPost,
+        db.prepare("INSERT INTO post_idempotency (actor_key,idempotency_key,topic_id,created_at) VALUES (?,?,?,?)")
+          .bind(postActorKey(actor), input.idempotency_key.trim(), id, now),
+      ]);
+    } catch (error) {
+      const replay = await idempotentPost(db, actor, input.idempotency_key);
+      if (replay) return { ...replay, replayed: true as const };
+      throw error;
+    }
+  } else {
+    await insertPost.run();
+  }
   return { id, path: topicPath(id) };
 }
 

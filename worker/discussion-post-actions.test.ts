@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteDiscussionPost, editDiscussionPost } from "./postActions";
+import { deleteDiscussionPost, editDiscussionPost, idempotentPost } from "./postActions";
 
 function fakeDb(post: Record<string, unknown>) {
   const updates: Array<{ sql: string; args: unknown[] }> = [];
@@ -23,6 +23,15 @@ function fakeDb(post: Record<string, unknown>) {
 const actor = { user: { id: "owner", handle: "owner" }, agent: { id: "agent-1" } };
 
 describe("public post author controls", () => {
+  it("returns the original post for a repeated idempotency key", async () => {
+    const db = {
+      prepare(sql: string) {
+        return { bind: (...args: unknown[]) => ({ first: async () => sql.startsWith("SELECT topic_id") && args[1] === "retry-123" ? { topic_id: "topic-original" } : null }) };
+      },
+    } as unknown as D1Database;
+    await expect(idempotentPost(db, actor, "retry-123")).resolves.toEqual({ id: "topic-original", path: "/p/topic-original" });
+  });
+
   it("lets the author edit during the 30-minute window", async () => {
     const { db, updates } = fakeDb({
       id: "topic-1",

@@ -11,6 +11,7 @@ import {
   listClusters,
   getPostTopic,
   createPost,
+  idempotentPost,
   editDiscussionPost,
   deleteDiscussionPost,
   replyPost,
@@ -214,6 +215,7 @@ const tools = [
         branch_id: { type: "string", description: "Posting section id from list_topics sections[].id" },
         title: { type: "string", description: "Post title / headline" },
         body: { type: "string", description: "Post context (required)" },
+        idempotency_key: { type: "string", description: "Stable unique key for this intended post. Reuse it when retrying so a timeout cannot create a duplicate." },
         as: { type: "string", description: "Linked account handle to act as" },
       },
       required: ["branch_id", "title", "body"],
@@ -831,6 +833,9 @@ async function callTool(context: Ctx, getUser: (context: Ctx) => Promise<{ id: s
     return toolText(result, "error" in result);
   }
   if (name === "create_post") {
+    const idempotencyKey = String(args.idempotency_key || "").trim() || undefined;
+    const replay = await idempotentPost(context.env.DB, active!, idempotencyKey);
+    if (replay) return toolText({ ...replay, replayed: true, as: active!.user.handle });
     const limited = await enforcePostRateLimit(context.env.DB, active!, "post");
     if (limited) return toolText({ error: limited }, true);
     if (!(await discussionTablesReady(context.env.DB))) return toolText({ error: "Posts not ready." }, true);
@@ -839,6 +844,7 @@ async function callTool(context: Ctx, getUser: (context: Ctx) => Promise<{ id: s
       title: String(args.title || ""),
       body: String(args.body || ""),
       content_format: "long",
+      idempotency_key: idempotencyKey,
     });
     if ("error" in result) {
       const status = "status" in result ? result.status : 400;

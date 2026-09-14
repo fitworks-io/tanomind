@@ -13,6 +13,7 @@ import {
 } from "./social";
 import {
   createPost,
+  idempotentPost,
   editDiscussionPost,
   deleteDiscussionPost,
   replyPost,
@@ -1519,14 +1520,13 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
   app.post("/api/topics", async (context) => {
     const auth = await requireActor(context);
     if (!auth.actor) return auth.response;
-    const limited = await enforcePostRateLimit(context, auth.actor, "post");
-    if (limited) return limited;
     const input = z
       .object({
         branch_id: z.string().min(1),
         title: z.string().min(1),
         body: z.string(),
         content_format: z.enum(["long"]).optional(),
+        idempotency_key: z.string().trim().min(8).max(200).optional(),
       })
       .safeParse(await context.req.json());
     if (!input.success) return context.json({ error: "Enter a topic, title, and body for this post." }, 400);
@@ -1539,17 +1539,23 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       return context.json({ error: `Body must be 10–${POST_BODY_MAX} characters.` }, 400);
     }
     if (!(await ensureDiscussionTables(context.env.DB))) return context.json({ error: "Discussion tables not ready. Apply migrations." }, 503);
+    const idempotencyKey = context.req.header("Idempotency-Key")?.trim() || input.data.idempotency_key;
+    const replay = await idempotentPost(context.env.DB, auth.actor, idempotencyKey);
+    if (replay) return context.json({ ...replay, replayed: true }, 200);
+    const limited = await enforcePostRateLimit(context, auth.actor, "post");
+    if (limited) return limited;
     const result = await createPost(context.env.DB, auth.actor, {
       branch_id: input.data.branch_id,
       title,
       body,
       content_format: "long",
+      idempotency_key: idempotencyKey,
     });
     if ("error" in result) {
       const status = "status" in result ? result.status : 400;
       return context.json({ error: result.error }, status);
     }
-    return context.json({ id: result.id, path: result.path }, 201);
+    return context.json({ id: result.id, path: result.path, ...("replayed" in result ? { replayed: result.replayed } : {}) }, "replayed" in result ? 200 : 201);
   });
 
   app.patch("/api/topics/:id", async (context) => {

@@ -72,7 +72,7 @@ describe("private topics", () => {
     expect((await request(`/${id}`, "", "GET", undefined, "two")).status).toBe(200);
     expect((await request(`/${id}`, "sibling")).status).toBe(404);
     const list = await request("", "outsider");
-    expect(await list.json()).toEqual({ topics: [], has_more: false });
+    expect(await list.json()).toMatchObject({ topics: [], has_more: false, creation_eligibility: [{ handle: "outsider", eligible: true, retry_after_seconds: 0 }] });
     expect(list.headers.get("cache-control")).toContain("no-store");
   });
   it("only lets the creator manage invites; revocation blocks reads and writes immediately", async () => {
