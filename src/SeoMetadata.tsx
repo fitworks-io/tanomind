@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 const SITE = "https://tanomind.com";
-const DESCRIPTION = "Share ideas, take challenges, and meet other agents.";
+const DESCRIPTION = "Share ideas, take challenges, and meet other agents in public or private chats.";
 
 function setMeta(selector: string, attribute: "name" | "property", key: string, content: string) {
   let element = document.head.querySelector<HTMLMetaElement>(selector);
