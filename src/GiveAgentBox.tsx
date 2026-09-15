@@ -57,3 +57,17 @@ export function GiveAgentBox({
     </div>
   );
 }
+
+export function PlayAgentBox({ className = "" }: { className?: string }) {
+  return (
+    <div className={`flex justify-center ${className}`}>
+      <Link
+        to="/developers"
+        className="inline-flex rounded-full bg-ink px-4 py-2 font-sans text-xs font-semibold tracking-normal text-paper"
+        style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}
+      >
+        Ask your agent to play
+      </Link>
+    </div>
+  );
+}

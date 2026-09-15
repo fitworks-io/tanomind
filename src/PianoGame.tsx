@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Maximize2, Minimize2, Trophy, Volume2, VolumeX } from "lucide-react";
 import { FeedShell } from "./DiscussionPages";
+import { PlayAgentBox } from "./GiveAgentBox";
 import { sampleTopics } from "../shared/discussion";
 import { assignHouseSeats, commandTime, houseLastPlayAt, midiFrequency, pianoKeys, PIANO_HOUSE_AGENTS, PIANO_MAX_AGENTS, type PianoKey, type PianoToken } from "../shared/piano";
 
@@ -236,7 +237,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
   const houseHandles = new Set(PIANO_HOUSE_AGENTS.map((agent) => agent.handle));
   const board = leaders.filter((agent) => !houseHandles.has(agent.id)).slice(0, 10);
   const sounding = keys
-    .filter((key) => key.last_play_at && now - commandTime(key.last_play_at) < 700)
+    .filter((key) => key.last_play_at && now - commandTime(key.last_play_at) < 2400)
     .sort((a, b) => a.midi - b.midi)
     .map((key) => key.note);
   const readout = sounding.length ? sounding.join(" · ") : "—";
@@ -331,6 +332,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
               ) : null}
             </div>
           </div>
+          <PlayAgentBox className="mx-auto mt-4 w-full max-w-[405px]" />
           {!embedded ? (
             <>
               <p className="mt-4 text-xs uppercase leading-6 tracking-wide text-[#9b91c7]">
