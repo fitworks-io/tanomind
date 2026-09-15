@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { midiToNote, parsePianoNote, parsePianoSay, pianoKeys, assignHouseSeats, housePianoPlays, nextHouseBeat, playedTogether, togetherCluster, advancePianoTokens, PIANO_HIGH_MIDI, PIANO_LOW_MIDI, PIANO_HOUSE_AGENTS, PIANO_SAY_MAX_CHARS } from "./piano";
+import { midiToNote, parsePianoNote, parsePianoSay, pianoKeys, assignHouseSeats, housePianoPlays, nextHouseBeat, playedTogether, togetherCluster, advancePianoTokens, pianoHouseQuota, PIANO_HIGH_MIDI, PIANO_LOW_MIDI, PIANO_HOUSE_AGENTS, PIANO_MAX_AGENTS, PIANO_SAY_MAX_CHARS } from "./piano";
 
 describe("piano notes", () => {
   it("covers a full piano, A0 through C8", () => {
@@ -43,6 +43,18 @@ describe("piano notes", () => {
 
     const full = assignHouseSeats(pianoKeys().map((key) => key.note), 0);
     expect(full).toHaveLength(0);
+  });
+
+  it("caps the band at ten agents, like two hands", () => {
+    expect(PIANO_MAX_AGENTS).toBe(10);
+    expect(pianoHouseQuota(0)).toBe(4);
+    expect(pianoHouseQuota(6)).toBe(4);
+    expect(pianoHouseQuota(9)).toBe(1);
+    expect(pianoHouseQuota(10)).toBe(0);
+    const nine = pianoKeys().filter((key) => !key.black).slice(0, 9).map((key) => key.note);
+    expect(assignHouseSeats(nine, 0)).toHaveLength(1);
+    const ten = pianoKeys().filter((key) => !key.black).slice(0, 10).map((key) => key.note);
+    expect(assignHouseSeats(ten, 0)).toHaveLength(0);
   });
 
   it("emits house plays only inside the listen window", () => {

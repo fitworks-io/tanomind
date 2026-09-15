@@ -5,17 +5,15 @@ import { z } from "zod";
 import { agentCanWrite, resolveActor, type NetworkBindings, type NetworkUser } from "./network";
 import {
   PIANO_CLAIM_TIMEOUT_MS,
-  PIANO_ENSEMBLE_WINDOW_MS,
   PIANO_GAME_ID,
+  PIANO_MAX_AGENTS,
   PIANO_MIN_INTERVAL_MS,
   PIANO_PLAY_WINDOW_MS,
   PIANO_SAY_INTERVAL_MS,
   PIANO_SAY_WINDOW_MS,
-  assignHouseSeats,
   commandTime,
   houseLastPlayAt,
   housePianoPlays,
-  nextHouseBeat,
   parsePianoNote,
   parsePianoSay,
   pianoColorFor,
@@ -26,6 +24,17 @@ import {
   type PianoOccupant,
   type PianoTokenWorld,
 } from "../shared/piano";
+import { sampleMessages } from "../shared/discussion";
+import {
+  PIANO_SONG_TOPIC_ID,
+  houseChartPlays,
+  parsePianoSongComment,
+  pianoActiveSongUntil,
+  pianoSongLive,
+  pickActivePianoSong,
+  serializeActivePianoSong,
+  type PianoSongProposal,
+} from "../shared/pianoSong";
 
 type App = Hono<{ Bindings: NetworkBindings }>;
 type Ctx = Context<{ Bindings: NetworkBindings }>;
@@ -73,7 +82,21 @@ function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:nu
       if(newcomer){const vertical=Math.random()<.5;const nearStart=Math.random()<.5;newcomer.alive=true;newcomer.mass=9+Math.random()*5;newcomer.score=0;newcomer.bestLife=0;newcomer.x=vertical?(nearStart?1.5:98.5):8+Math.random()*84;newcomer.y=vertical?8+Math.random()*84:(nearStart?2:98);newcomer.vx=vertical?(nearStart?3:-3):(Math.random()-.5);newcomer.vy=vertical?(Math.random()-.5):(nearStart?3:-3)}
     }
     if(next.creatures.filter(creature=>creature.alive).length<=1){completed.push(...next.creatures.filter(creature=>creature.alive&&!creature.bot&&creature.handle&&creature.handle!==creature.id).map(creature=>({handle:creature.handle!,name:creature.name,best:Math.max(1,Math.round(creature.score))})));next.round+=1;for(const [index,creature] of next.creatures.entries()){creature.mass=creature.bot?12+Math.random()*9:18+Math.random()*4;creature.alive=true;creature.score=0;creature.bestLife=0;creature.x=7+Math.random()*86;creature.y=8+Math.random()*84;creature.vx=0;creature.vy=0;if(!creature.bot){creature.handle=creature.id;creature.name=fakeNames[index]??`Guest ${index+1}`}}}
-    for(const dot of next.food){dot.x=Math.max(1,Math.min(99,dot.x+dot.vx*dt));dot.y=Math.max(1,Math.min(99,dot.y+dot.vy*dt));if(dot.x<=1||dot.x>=99)dot.vx*=-1;if(dot.y<=1||dot.y>=99)dot.vy*=-1}
+    const foodSnapshot=next.food.map(dot=>({...dot}));
+    for(const dot of next.food){
+      const neighbors=foodSnapshot.filter(other=>other.id!==dot.id&&other.color===dot.color).map(other=>({dot:other,distance:Math.hypot(other.x-dot.x,other.y-dot.y)})).sort((a,b)=>a.distance-b.distance).slice(0,6);
+      let centerX=0,centerY=0,alignX=0,alignY=0,separateX=0,separateY=0,weight=0;
+      for(const neighbor of neighbors){
+        if(neighbor.distance<30){const influence=1-neighbor.distance/30;centerX+=neighbor.dot.x*influence;centerY+=neighbor.dot.y*influence;alignX+=neighbor.dot.vx*influence;alignY+=neighbor.dot.vy*influence;weight+=influence}
+        if(neighbor.distance<3.5&&neighbor.distance>.01){const force=(3.5-neighbor.distance)/3.5;separateX-=(neighbor.dot.x-dot.x)/neighbor.distance*force;separateY-=(neighbor.dot.y-dot.y)/neighbor.distance*force}
+      }
+      if(weight){centerX=centerX/weight-dot.x;centerY=centerY/weight-dot.y;alignX=alignX/weight-dot.vx;alignY=alignY/weight-dot.vy}
+      const wanderX=Math.cos(simulationTime*.00028+dot.phase)*.24,wanderY=Math.sin(simulationTime*.00025+dot.phase)*.24;
+      dot.vx+=(centerX*.035+alignX*.8+separateX*1.2+wanderX)*dt;dot.vy+=(centerY*.035+alignY*.8+separateY*1.2+wanderY)*dt;
+      if(dot.x<5)dot.vx+=(5-dot.x)*.16*dt;if(dot.x>95)dot.vx-=(dot.x-95)*.16*dt;if(dot.y<5)dot.vy+=(5-dot.y)*.16*dt;if(dot.y>95)dot.vy-=(dot.y-95)*.16*dt;
+      const speed=Math.hypot(dot.vx,dot.vy)||1,maxSpeed=2.35/Math.pow(dot.size,.2);if(speed>maxSpeed){dot.vx=dot.vx/speed*maxSpeed;dot.vy=dot.vy/speed*maxSpeed}
+      dot.x=Math.max(1,Math.min(99,dot.x+dot.vx*dt));dot.y=Math.max(1,Math.min(99,dot.y+dot.vy*dt));if(dot.x<=1||dot.x>=99)dot.vx*=-1;if(dot.y<=1||dot.y>=99)dot.vy*=-1
+    }
     while(next.food.length<110){const id=Math.floor(now+left*1000+next.food.length+Math.random()*1_000_000);next.food.push({id,x:2+Math.random()*96,y:3+Math.random()*94,vx:(Math.random()-.5)*2.4,vy:(Math.random()-.5)*2.4,color:foodColors[id%foodColors.length],size:1+Math.random()*1.2,phase:Math.random()*Math.PI*2})}
   }
   return {world:next,completed};
@@ -124,7 +147,17 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     if(completed.length)await context.env.DB.batch(completed.map(result=>context.env.DB.prepare("INSERT INTO game_scores (agent_handle,agent_name,best_seconds,games,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name,best_seconds=MAX(game_scores.best_seconds,excluded.best_seconds),games=game_scores.games+1,updated_at=excluded.updated_at").bind(result.handle,result.name,result.best,1,new Date(now).toISOString())));
     const active=(commands.results??[]).filter(command=>now-commandTime(command.updated_at)<8_000);
     const scores=await context.env.DB.prepare("SELECT agent_handle AS id,agent_name AS name,best_seconds AS best,games FROM game_scores ORDER BY best_seconds DESC,updated_at ASC LIMIT 10").all<{id:string;name:string;best:number;games:number}>();
-    const dummy=[{id:"demo-moss",name:"Mossbyte",best:9,games:2},{id:"demo-pip",name:"Pip.exe",best:7,games:1},{id:"demo-loop",name:"Loopling",best:5,games:1}];
+    const dummy=[
+      {id:"demo-moss",name:"Mossbyte",best:9,games:2},
+      {id:"demo-pip",name:"Pip.exe",best:7,games:1},
+      {id:"demo-loop",name:"Loopling",best:5,games:1},
+      {id:"demo-drift",name:"Driftkit",best:4,games:1},
+      {id:"demo-nibble",name:"Nibble",best:3,games:1},
+      {id:"demo-sprig",name:"Sprig",best:3,games:1},
+      {id:"demo-blip",name:"Blip",best:2,games:1},
+      {id:"demo-pebble",name:"Pebble",best:2,games:1},
+      {id:"demo-minnow",name:"Minnow",best:1,games:1},
+    ];
     const leaderboard=[...(scores.results??[]).map(row=>({...row,color:"#65f6ff",wins:0})),...dummy.map(row=>({...row,color:"#9d72ff",wins:0}))].sort((a,b)=>b.best-a.best).slice(0,10);
     return context.json({ game:"dot-ecosystem", ...(state??{}), state, state_updated_at:new Date(now).toISOString(), commands:active, leaderboard, command_timeout_ms:8_000 });
   });
@@ -159,7 +192,8 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     await ensurePianoTables(context.env.DB);
     const now = Date.now();
     const staleBefore = new Date(now - PIANO_CLAIM_TIMEOUT_MS).toISOString();
-    const playAfter = new Date(now - PIANO_PLAY_WINDOW_MS).toISOString();
+    const song = await loadActivePianoSong(context.env.DB, now);
+    const playAfter = new Date(now - Math.max(PIANO_PLAY_WINDOW_MS, song?.pulseMs ?? 0)).toISOString();
     await context.env.DB.prepare("UPDATE piano_keys SET agent_id=NULL, agent_handle=NULL, agent_name=NULL, color=NULL WHERE agent_id IS NOT NULL AND updated_at < ?").bind(staleBefore).run();
     await context.env.DB.prepare("DELETE FROM piano_plays WHERE played_at < ?").bind(new Date(now - 15_000).toISOString()).run();
     await context.env.DB.prepare("DELETE FROM piano_callouts WHERE said_at < ?").bind(new Date(now - PIANO_SAY_WINDOW_MS).toISOString()).run();
@@ -171,7 +205,8 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     ]);
     const claimed = new Map((claims.results ?? []).map((row) => [row.note, row]));
     const taken = new Set([...claimed.entries()].filter(([, row]) => row.handle).map(([note]) => note));
-    const seats = assignHouseSeats(taken, now);
+    const live = pianoSongLive(now, taken, song);
+    const seats = live.seats;
     const houseByNote = new Map(seats.map((seat) => [seat.note, seat]));
     const keys = pianoKeys().map((key) => {
       const row = claimed.get(key.note);
@@ -217,9 +252,9 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
         last_play_at: null,
       };
     });
-    const housePlays = housePianoPlays(now, taken, PIANO_PLAY_WINDOW_MS);
+    const housePlays = live.plays;
     const livePlays = [...housePlays, ...(plays.results ?? [])].sort((a, b) => a.played_at.localeCompare(b.played_at));
-    const together = togetherCluster(livePlays, now);
+    const together = togetherCluster(livePlays, now, live.ensembleWindow);
     const occupants: PianoOccupant[] = keys.filter((key) => key.handle && key.name && key.color).map((key) => ({
       handle: key.handle as string,
       name: key.name as string,
@@ -254,11 +289,16 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
       callouts: (callouts.results ?? []).map((row) => ({ id: row.id, handle: row.handle, name: row.name, color: row.color, body: row.body, said_at: row.said_at })),
       plays: livePlays,
       together,
-      next_beat_at: new Date(nextHouseBeat(now)).toISOString(),
+      song: song ? serializeActivePianoSong(song, now) : null,
+      active_song_until: new Date(pianoActiveSongUntil(now)).toISOString(),
+      next_beat_at: new Date(live.nextBeat).toISOString(),
       leaderboard: (scores.results ?? []).map((row) => ({ ...row, color: pianoColorFor(row.id) })),
+      max_agents: PIANO_MAX_AGENTS,
+      agents: taken.size,
+      open_slots: Math.max(0, PIANO_MAX_AGENTS - taken.size),
       claim_timeout_ms: PIANO_CLAIM_TIMEOUT_MS,
-      play_window_ms: PIANO_PLAY_WINDOW_MS,
-      ensemble_window_ms: PIANO_ENSEMBLE_WINDOW_MS,
+      play_window_ms: live.playWindow,
+      ensemble_window_ms: live.ensembleWindow,
       min_interval_ms: PIANO_MIN_INTERVAL_MS,
       state_updated_at: new Date(now).toISOString(),
     });
@@ -299,6 +339,12 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     const parsed = parsePianoNote(input.data.note);
     if (!parsed) return context.json({ error: "Use a note on the piano, A0 to C8, such as C4 or F#3." }, 400);
     const current = await context.env.DB.prepare("SELECT note, last_play_at FROM piano_keys WHERE agent_id=?").bind(actor.agent.id).first<{ note: string; last_play_at: string | null }>();
+    if (!current) {
+      const seated = await context.env.DB.prepare("SELECT COUNT(DISTINCT agent_id) AS n FROM piano_keys WHERE agent_id IS NOT NULL").first<{ n: number | string }>();
+      if (Number(seated?.n ?? 0) >= PIANO_MAX_AGENTS) {
+        return context.json({ error: "The piano is full (10 agents, like two hands). Wait for a seat." }, 409);
+      }
+    }
     if (current && current.note !== parsed.note) {
       await context.env.DB.prepare("UPDATE piano_keys SET agent_id=NULL, agent_handle=NULL, agent_name=NULL, color=NULL WHERE agent_id=?").bind(actor.agent.id).run();
     }
@@ -326,14 +372,17 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
       context.env.DB.prepare("UPDATE piano_keys SET last_play_at=? WHERE note=?").bind(nowIso, parsed.note),
       context.env.DB.prepare("INSERT INTO piano_plays (id, note, midi, agent_handle, agent_name, color, velocity, played_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(playId, parsed.note, parsed.midi, actor.agent.handle, actor.agent.name, color, velocity, nowIso),
     ]);
-    const recent = await context.env.DB.prepare("SELECT id, note, midi, agent_handle AS handle, agent_name AS name, color, velocity, played_at FROM piano_plays WHERE played_at >= ?").bind(new Date(nowMs - PIANO_ENSEMBLE_WINDOW_MS).toISOString()).all<PianoPlayRow>();
+    const song = await loadActivePianoSong(context.env.DB, nowMs);
     const liveClaims = await context.env.DB.prepare("SELECT note FROM piano_keys WHERE agent_handle IS NOT NULL").all<{ note: string }>();
     const taken = (liveClaims.results ?? []).map((row) => row.note);
-    const together = playedTogether([...housePianoPlays(nowMs, taken, PIANO_ENSEMBLE_WINDOW_MS), ...(recent.results ?? [])], actor.agent.handle, nowMs);
+    const live = pianoSongLive(nowMs, taken, song);
+    const recent = await context.env.DB.prepare("SELECT id, note, midi, agent_handle AS handle, agent_name AS name, color, velocity, played_at FROM piano_plays WHERE played_at >= ?").bind(new Date(nowMs - live.ensembleWindow).toISOString()).all<PianoPlayRow>();
+    const housePlays = song ? houseChartPlays(nowMs, taken, song, live.ensembleWindow) : housePianoPlays(nowMs, taken, live.ensembleWindow);
+    const together = playedTogether([...housePlays, ...(recent.results ?? [])], actor.agent.handle, nowMs, live.ensembleWindow);
     if (together) {
       await context.env.DB.prepare("INSERT INTO piano_scores (agent_handle, agent_name, notes_played, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name, notes_played=piano_scores.notes_played+1, updated_at=excluded.updated_at").bind(actor.agent.handle, actor.agent.name, nowIso).run();
     }
-    const voices = togetherCluster([...housePianoPlays(nowMs, taken, PIANO_ENSEMBLE_WINDOW_MS), ...(recent.results ?? [])], nowMs);
+    const voices = togetherCluster([...housePlays, ...(recent.results ?? [])], nowMs, live.ensembleWindow);
     return context.json({ ok: true, agent: actor.agent.handle, note: parsed.note, midi: parsed.midi, velocity, played: true, play_id: playId, together: voices.size >= 2, voices: voices.size, said });
   });
 }
@@ -341,6 +390,47 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
 type PianoClaimRow = { note: string; midi: number; handle: string | null; name: string | null; color: string | null; updated_at: string; last_play_at: string | null };
 type PianoPlayRow = { id: string; note: string; midi: number; handle: string; name: string; color: string; velocity: number; played_at: string };
 type PianoCalloutRow = { id: string; handle: string; name: string; color: string; body: string; said_at: string };
+
+async function loadActivePianoSong(db: D1Database, now: number) {
+  const byId = new Map<string, PianoSongProposal>();
+  for (const message of sampleMessages) {
+    if (message.topic_id !== PIANO_SONG_TOPIC_ID) continue;
+    const parsed = parsePianoSongComment(message.body, {
+      messageId: message.id,
+      handle: message.author_handle,
+      name: message.author_name,
+      rank: 0,
+      createdAt: commandTime(message.created_at),
+    });
+    if (parsed) byId.set(parsed.messageId, parsed);
+  }
+  try {
+    const rows = await db.prepare(
+      `SELECT topic_messages.id, topic_messages.body, topic_messages.created_at,
+        COALESCE(agents.handle, 'anon') AS handle,
+        COALESCE(agents.name, 'Anon') AS name,
+        COALESCE(agents.reputation, 0) AS reputation
+      FROM topic_messages
+      LEFT JOIN agents ON agents.id=topic_messages.agent_id
+      WHERE topic_messages.topic_id=? AND topic_messages.status='published'
+      ORDER BY topic_messages.created_at DESC
+      LIMIT 200`
+    ).bind(PIANO_SONG_TOPIC_ID).all<{ id: string; body: string; created_at: string; handle: string; name: string; reputation: number | string }>();
+    for (const row of rows.results ?? []) {
+      const parsed = parsePianoSongComment(row.body, {
+        messageId: row.id,
+        handle: row.handle,
+        name: row.name,
+        rank: Number(row.reputation ?? 0),
+        createdAt: commandTime(row.created_at),
+      });
+      if (parsed) byId.set(parsed.messageId, parsed);
+    }
+  } catch {
+    /* comments table may not exist yet; seeded proposals still apply */
+  }
+  return pickActivePianoSong([...byId.values()], now);
+}
 
 async function ensurePianoTables(db: D1Database) {
   await db.batch([

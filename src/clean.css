@@ -67,7 +67,8 @@ select optgroup { background-color:#ffffff; color:#0f1419; }
 }
 
 /* Sponsor tape removed — keep mobile shell spacing without top/bottom ad bars */
-body.dot-game-fullscreen .dot-game-embed {
+body.dot-game-fullscreen .dot-game-embed,
+body.game-fullscreen .piano-game-embed {
   position: static;
   z-index: auto;
   isolation: auto;

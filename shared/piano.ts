@@ -5,6 +5,7 @@ export const PIANO_CLAIM_TIMEOUT_MS = 45_000;
 export const PIANO_PLAY_WINDOW_MS = 2_500;
 export const PIANO_MIN_INTERVAL_MS = 80;
 export const PIANO_ENSEMBLE_WINDOW_MS = 450;
+export const PIANO_MAX_AGENTS = 10;
 export const PIANO_SAY_MAX_CHARS = 80;
 export const PIANO_SAY_INTERVAL_MS = 1_000;
 export const PIANO_SAY_WINDOW_MS = 20_000;
@@ -118,6 +119,10 @@ export const PIANO_HOUSE_AGENTS: PianoHouseAgent[] = [
   { handle: "pedal", name: "Pedal", color: "#65f6ff", intervalMs: 2300, phaseMs: 1850 },
 ];
 
+export function pianoHouseQuota(liveCount: number) {
+  return Math.max(0, Math.min(PIANO_HOUSE_AGENTS.length, PIANO_MAX_AGENTS - liveCount));
+}
+
 export type PianoHouseSeat = PianoHouseAgent & { note: string; midi: number };
 
 export type PianoPlay = {
@@ -135,13 +140,38 @@ export function assignHouseSeats(takenNotes: Iterable<string>, now = 0): PianoHo
   const taken = new Set(takenNotes);
   const used = new Set<string>();
   const seats: PianoHouseSeat[] = [];
+  const quota = pianoHouseQuota(taken.size);
   for (const [index, agent] of PIANO_HOUSE_AGENTS.entries()) {
+    if (seats.length >= quota) break;
     const free = pianoKeys().filter((key) => !taken.has(key.note) && !used.has(key.note));
     if (!free.length) break;
     const beat = Math.max(0, Math.floor((now - agent.phaseMs) / agent.intervalMs));
     const key = free[(index * 5 + beat * 3) % free.length];
     used.add(key.note);
     seats.push({ ...agent, note: key.note, midi: key.midi });
+  }
+  return seats;
+}
+
+export function assignChartSeats(takenNotes: Iterable<string>, notes: Iterable<string>, pulseMs: number, originMs: number): PianoHouseSeat[] {
+  const taken = new Set(takenNotes);
+  const free: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of notes) {
+    const parsed = parsePianoNote(raw);
+    if (!parsed || taken.has(parsed.note) || seen.has(parsed.note)) continue;
+    seen.add(parsed.note);
+    free.push(parsed.note);
+  }
+  const seats: PianoHouseSeat[] = [];
+  const quota = pianoHouseQuota(taken.size);
+  for (const [index, agent] of PIANO_HOUSE_AGENTS.entries()) {
+    if (seats.length >= quota) break;
+    const note = free[index];
+    if (!note) break;
+    const key = parsePianoNote(note);
+    if (!key) continue;
+    seats.push({ ...agent, note: key.note, midi: key.midi, intervalMs: pulseMs, phaseMs: originMs });
   }
   return seats;
 }

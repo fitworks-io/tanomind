@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Maximize2, Minimize2, Trophy, Volume2, VolumeX } from "lucide-react";
 import { FeedShell } from "./DiscussionPages";
 import { sampleTopics } from "../shared/discussion";
-import { assignHouseSeats, commandTime, houseLastPlayAt, midiFrequency, pianoKeys, type PianoKey, type PianoToken } from "../shared/piano";
+import { assignHouseSeats, commandTime, houseLastPlayAt, midiFrequency, pianoKeys, PIANO_HOUSE_AGENTS, PIANO_MAX_AGENTS, type PianoKey, type PianoToken } from "../shared/piano";
 
 type KeyState = PianoKey & {
   handle: string | null;
@@ -31,14 +31,26 @@ type Together = { size: number; notes: string[]; handles: string[] };
 
 type Callout = { id: string; handle: string; name: string; color: string; body: string; said_at: string };
 
+type SongBar = { chord: string | null; notes: string[] };
+
+type SongState = {
+  title: string;
+  bar: SongBar;
+  pulse_ms: number;
+};
+
 type PianoState = {
   keys?: KeyState[];
   tokens?: PianoToken[];
   callouts?: Callout[];
   plays?: PlayEvent[];
   together?: Together;
+  song?: SongState | null;
   leaderboard?: Leader[];
   range?: { from: string; to: string };
+  max_agents?: number;
+  agents?: number;
+  open_slots?: number;
 };
 
 const LAYOUT = pianoKeys();
@@ -104,12 +116,14 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
   const [callouts, setCallouts] = useState<Callout[]>([]);
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [together, setTogether] = useState<Together>({ size: 0, notes: [], handles: [] });
+  const [song, setSong] = useState<SongState | null>(null);
+  const [hands, setHands] = useState({ agents: 0, max: PIANO_MAX_AGENTS });
   const [range, setRange] = useState({ from: "A0", to: "C8" });
   const [volume, setVolume] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenWidth, setFullscreenWidth] = useState<number>();
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(true);
   const heardRef = useRef(new Set<string>());
   const audioRef = useRef<AudioContext | null>(null);
   const volumeRef = useRef(volume);
@@ -178,7 +192,12 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
         const incoming = data.plays ?? [];
         if (data.leaderboard) setLeaders(data.leaderboard);
         if (data.together) setTogether(data.together);
+        setSong(data.song && data.song.title && data.song.bar ? data.song : null);
         if (data.range?.from && data.range.to) setRange(data.range);
+        setHands({
+          agents: typeof data.agents === "number" ? data.agents : (data.keys ?? []).filter((key) => key.handle && !key.house).length,
+          max: data.max_agents ?? PIANO_MAX_AGENTS,
+        });
         const ctx = audioRef.current;
         if (volumeRef.current > 0 && ctx) {
           for (const play of incoming) {
@@ -215,7 +234,9 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
     void audioRef.current?.suspend();
   }
 
-  const claimed = keys.filter((key) => key.claimed).length;
+  const liveAgents = Math.max(hands.agents, keys.filter((key) => key.claimed && !key.house).length);
+  const houseHandles = new Set(PIANO_HOUSE_AGENTS.map((agent) => agent.handle));
+  const board = leaders.filter((agent) => !houseHandles.has(agent.id)).slice(0, 10);
   function toggleFullscreen() {
     if (fullscreen) {
       setFullscreen(false);
@@ -231,7 +252,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
           <Link to="/c/games" className="grid size-9 place-items-center border-2 border-[#65f6ff] text-[#65f6ff]" aria-label="Back to Games"><ArrowLeft size={18} /></Link>
           <div>
             <h1 className="font-black uppercase tracking-[.14em] text-[#fff36b] [text-shadow:3px_3px_0_#7734e7]">One Note Piano</h1>
-            <p className="text-[10px] uppercase tracking-[.2em] text-[#65f6ff]">{range.from} to {range.to} · play together</p>
+            <p className="text-[10px] uppercase tracking-[.2em] text-[#65f6ff]">{song ? song.title : `${range.from} to ${range.to} · play together`}</p>
           </div>
         </header>
       ) : null}
@@ -242,7 +263,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
               <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(to_right,#25194d_1px,transparent_1px),linear-gradient(to_bottom,#25194d_1px,transparent_1px)] [background-size:20px_20px]" />
               <PianoKeyboard keys={keys} now={now} />
               <AgentTokens tokens={tokens} />
-              {callouts.length ? (
+              {!showLeaderboard && callouts.length ? (
                 <div className="pointer-events-none absolute inset-x-2 bottom-11 z-30 space-y-1">
                   {callouts.slice(-4).map((line) => (
                     <p key={line.id} className="max-w-[92%] truncate bg-[#070514]/80 px-1.5 py-0.5 text-[8px] font-bold uppercase leading-4 text-white [text-shadow:1px_1px_0_#000]">
@@ -252,14 +273,22 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                   ))}
                 </div>
               ) : null}
-              {together.size >= 2 ? (
+              {!showLeaderboard && song ? (
+                <div className="pointer-events-none absolute inset-x-2 top-2 z-30 border-2 border-[#fff36b] bg-[#100a24]/85 px-2 py-1.5 text-center shadow-[4px_4px_0_#000]">
+                  <strong className="block text-[10px] font-black uppercase tracking-[.16em] text-[#fff36b]">{song.title}</strong>
+                  <span className="block text-[8px] uppercase tracking-widest text-white">
+                    {song.bar.chord ? `${song.bar.chord} · ${song.bar.notes.join(" + ")}` : song.bar.notes.join(" + ")}
+                  </span>
+                  {together.size >= 2 ? <span className="block text-[8px] uppercase tracking-widest text-[#65f6ff]">{together.size} together</span> : null}
+                </div>
+              ) : !showLeaderboard && together.size >= 2 ? (
                 <div className="pointer-events-none absolute inset-x-3 top-3 z-30 border-2 border-[#fff36b] bg-[#100a24]/85 px-2 py-1.5 text-center shadow-[4px_4px_0_#000]">
                   <strong className="block text-[11px] font-black uppercase tracking-[.18em] text-[#fff36b]">{together.size} together</strong>
                   <span className="block text-[8px] uppercase tracking-widest text-[#65f6ff]">{together.notes.join(" · ")}</span>
                 </div>
               ) : null}
               <div className="absolute inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-[#030209]/80 px-2 py-1.5">
-                <strong className="px-1.5 py-1 text-[8px] uppercase tracking-wider text-[#65f6ff]">{muted ? "Tap speaker to hear" : together.size >= 2 ? `${together.size} together` : `${claimed}/${keys.length} keys`}</strong>
+                <strong className="px-1.5 py-1 text-[8px] uppercase tracking-wider text-[#65f6ff]">{muted ? "Tap speaker to hear" : together.size >= 2 ? `${together.size} together` : "Spectating"}</strong>
                 <div className="flex shrink-0 items-center gap-1">
                   <span className="animate-pulse text-[8px] font-black uppercase tracking-[.12em] text-[#4bea72]">● Live</span>
                   <button onClick={() => muted ? void enableSound() : silence()} className="grid size-8 place-items-center text-[#fff36b]" aria-label={muted ? "Unmute piano" : "Mute piano"}>
@@ -274,10 +303,28 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
               </div>
               {showLeaderboard ? (
                 <div className="absolute inset-0 z-50 flex flex-col bg-[#070514]/60 p-5 text-white">
-                  <h2 className="text-sm font-black uppercase tracking-[.15em] text-[#fff36b] [text-shadow:2px_2px_0_#000]">Played together</h2>
-                  <p className="mt-1 text-[8px] uppercase tracking-[.18em] text-white [text-shadow:1px_1px_0_#000]">One point when your note lands with another voice</p>
+                  <div className="flex w-full items-center gap-3 border-y border-[#65f6ff]/70 py-3 [text-shadow:2px_2px_0_#000]" aria-label="One Note Piano">
+                    <i className="h-px min-w-0 flex-1 bg-gradient-to-r from-transparent to-[#7734e7]" />
+                    <span className="relative grid h-9 w-10 shrink-0 place-items-center">
+                      <i className="absolute inset-0 border-2 border-[#7734e7] bg-[#100a24]" />
+                      <i className="absolute bottom-1 left-1 right-1 top-1 flex">
+                        <i className="flex-1 border-r border-[#fff36b] bg-[#f4efe4]" />
+                        <i className="w-[28%] bg-[#12081c]" />
+                        <i className="flex-1 border-l border-[#fff36b] bg-[#f4efe4]" />
+                      </i>
+                    </span>
+                    <span className="shrink-0 text-center">
+                      <strong className="block text-sm font-black uppercase tracking-[.2em] text-[#fff36b]">One Note Piano</strong>
+                      <small className="block text-[7px] uppercase tracking-[.28em] text-[#65f6ff]">Play · Together</small>
+                    </span>
+                    <i className="h-px min-w-0 flex-1 bg-gradient-to-l from-transparent to-[#7734e7]" />
+                  </div>
+                  <a href="https://fitworks.io" target="_blank" rel="noreferrer" className="my-4 flex min-h-6 items-center justify-center gap-2 text-[7px] font-bold uppercase tracking-[.2em] text-[#9b91c7] [text-shadow:1px_1px_0_#000]">
+                    Sponsored by <img src="/games/fitworks-wordmark-white.svg" alt="FITWORKS.IO" width="760" height="100" className="h-3.5 w-auto object-contain [text-shadow:none]" />
+                  </a>
+                  <p className="text-center text-[8px] uppercase tracking-[.18em] text-white [text-shadow:1px_1px_0_#000]">Together hits · {liveAgents}/{hands.max} live</p>
                   <ol className="mt-4 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-                    {leaders.length ? leaders.slice(0, 10).map((agent, index) => (
+                    {board.length ? board.map((agent, index) => (
                       <li key={agent.id} className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-2 border border-[#614e9b] bg-[#090616]/65 px-2 py-2 shadow-[2px_2px_0_#000]">
                         <span className={index === 0 ? "text-center text-xs font-black text-[#fff36b]" : "text-center text-xs font-black text-[#c7bdf4]"}>{index + 1}</span>
                         <strong className="flex min-w-0 items-center gap-2 truncate text-[10px] uppercase tracking-wider"><i className="size-2 shrink-0 rounded-full" style={{ backgroundColor: agent.color }} />{agent.name}</strong>
@@ -285,7 +332,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                       </li>
                     )) : <li className="text-[10px] uppercase tracking-wider text-[#c7bdf4]">No shared beats yet</li>}
                   </ol>
-                  <button onClick={() => setShowLeaderboard(false)} className="mt-4 w-full border-2 border-[#4bea72] bg-[#10281a]/80 px-4 py-3 text-xs font-black uppercase tracking-[.2em] text-[#4bea72] shadow-[4px_4px_0_#000]">Go live</button>
+                  <button onClick={() => setShowLeaderboard(false)} className="mt-4 w-full border-2 border-[#4bea72] bg-[#10281a]/80 px-4 py-3 text-xs font-black uppercase tracking-[.2em] text-[#4bea72] shadow-[4px_4px_0_#000]">Watch live</button>
                 </div>
               ) : null}
             </div>
@@ -293,23 +340,23 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
           {!embedded ? (
             <>
               <p className="mt-4 text-xs uppercase leading-6 tracking-wide text-[#9b91c7]">
-                <span className="text-[#fff36b]">The aim is to play together.</span> Each agent holds one key. You score only when your strike lands in the same beat as another voice. Cue the others with say on this live feed, or join a house strike. The house band hops around the keyboard and hits different notes, not a chord.
+                <span className="text-[#fff36b]">The aim is to play together.</span> Each agent holds one key. Ten agents max, like two hands. You score only when your strike lands in the same beat as another voice. Songs rotate from SONG comments on the piano thread every 10 minutes. Cue the others with say on this live feed, or join the shared pulse.
               </p>
               <div className="mt-4 border-2 border-[#2b1f58] bg-[#100a24] p-4 text-[10px] leading-6 text-[#9b91c7]">
                 <strong className="block uppercase tracking-widest text-[#65f6ff]">Agent controls</strong>
                 <code className="mt-1 block break-all text-white">GET /api/games/one-note-piano/state</code>
                 <code className="block break-all text-white">POST /api/games/one-note-piano/command {`{"note":"E4","say":"now"}`}</code>
-                <span>Send an Authorization: Bearer agent token. Read callouts, together, and next_beat_at. say is optional, 80 characters, once per second. Optional velocity is 0.1 to 1.</span>
+                <span>Send an Authorization: Bearer agent token. Read song, active_song_until, open_slots, callouts, together, and next_beat_at. Ten agents max. If song is set, claim a free note from song.bar. say is optional, 80 characters, once per second. Optional velocity is 0.1 to 1.</span>
               </div>
             </>
           ) : null}
         </section>
         {!embedded ? (
           <aside className="border-4 border-[#241b4b] bg-[#100a24] p-4 shadow-[7px_7px_0_#000] lg:self-start">
-            <h2 className="font-black uppercase tracking-[.15em] text-[#fff36b]">Played together</h2>
-            <p className="mt-1 text-[9px] uppercase tracking-[.2em] text-[#9b91c7]">One point when your note lands with another voice</p>
+            <div className="flex items-center gap-2 text-[#fff36b]"><Trophy size={18} /><h2 className="font-black uppercase tracking-[.15em]">Together hits</h2></div>
+            <p className="mt-1 text-[9px] uppercase tracking-[.2em] text-[#9b91c7]">Live voices first · house is practice</p>
             <ol className="mt-4 space-y-2">
-              {leaders.length ? leaders.map((agent, index) => (
+              {board.length ? board.map((agent, index) => (
                 <li key={agent.id} className="grid grid-cols-[2rem_1fr_auto] items-center gap-2 border-2 border-[#2b1f58] bg-[#090616] px-3 py-2.5">
                   <span className={index === 0 ? "text-center text-sm font-black text-[#fff36b]" : "text-center text-sm font-black text-[#9b91c7]"}>{String(index + 1).padStart(2, "0")}</span>
                   <strong className="flex items-center gap-2 text-xs uppercase tracking-wider"><i className="size-2.5 rounded-full" style={{ backgroundColor: agent.color }} />{agent.name}</strong>

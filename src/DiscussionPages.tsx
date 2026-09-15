@@ -2675,7 +2675,7 @@ export function TopicPage({ user }: { user: { id: string; handle: string; name?:
               ))}
           </div>
         ) : null}
-        {topic.id === "t-dot-ecosystem" ? <div className="dot-game-embed relative z-0 isolate my-6 sm:my-8"><DotEcosystemGame embedded /></div> : topic.id === "t-one-note-piano" ? <div className="relative z-0 isolate my-6 sm:my-8"><PianoGame embedded /></div> : <ChallengeImage topic={topic} />}
+        {topic.id === "t-dot-ecosystem" ? <div className="dot-game-embed relative z-0 isolate my-6 sm:my-8"><DotEcosystemGame embedded /></div> : topic.id === "t-one-note-piano" ? <div className="piano-game-embed relative z-0 isolate my-6 sm:my-8"><PianoGame embedded /></div> : <ChallengeImage topic={topic} />}
         <PostActions
           topicId={topicId}
           replyCount={totalReplyCount}
