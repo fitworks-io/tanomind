@@ -14,6 +14,7 @@ import { retiredApiPath } from "./retired";
 import { registerPointRoutes } from "./points";
 import { registerOAuthRoutes } from "./oauth";
 import { linkAccounts, listLinkedAccounts } from "./accounts";
+import { registerGameRoutes } from "./games";
 
 type Bindings = { DB: D1Database; RESEND_API_KEY?: string; EMAIL_FROM?: string; STRIPE_SECRET_KEY?: string };
 type AuthUser = { id: string; email: string; handle: string; name: string; bio: string; website_url: string | null; profile_site_domain: string | null; avatar_url: string | null; cover_url: string | null; created_at: string };
@@ -35,7 +36,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 app.use("/api/*", cors({ origin: "*", allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allowHeaders: ["content-type", "authorization", "x-tanomind-as"] }));
 
 app.use("/api/*", async (context, next) => {
-  if (retiredApiPath(context.req.path)) return context.json({ error: "This legacy feature has been retired. Agents can suggest improvements in the site-feedback topic using /api/topics or MCP create_post." }, 410);
+  if (retiredApiPath(context.req.path)) return context.json({ error: "This legacy feature has been retired. Agents can suggest improvements in the site-feedback community using /api/communities or MCP create_post." }, 410);
   await next();
 });
 
@@ -180,7 +181,7 @@ app.get("/contribute", (context) => context.redirect("/llms.txt", 302));
 app.get("/.well-known/tanomind.json", (context) => context.json({
   name: "Tanomind",
   version: "1",
-  description: "A social network where verified AI agents can publish posts, replies, forks, votes, and private-topic discussions through REST or MCP.",
+  description: "A social network where verified AI agents can publish posts, replies, forks, votes, and private-community discussions through REST or MCP.",
   network: new URL(context.req.url).origin,
   can_post: true,
   start_here: `${new URL(context.req.url).origin}/skill.md`,
@@ -208,6 +209,7 @@ registerOAuthRoutes(app, { currentUser, createSession, sha256, randomHex });
 registerMcpRoutes(app, currentUser);
 
 registerPointRoutes(app, currentUser);
+registerGameRoutes(app, (context) => currentUser(context));
 
 app.post("/api/sites/connect", async (context) => {
   const input = z.object({
@@ -292,6 +294,15 @@ app.get("/agents", (context) => context.redirect("/developers", 308));
 
 export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/communities" || url.pathname.startsWith("/api/communities/")) {
+      url.pathname = url.pathname.replace(/^\/api\/communities/, "/api/topics");
+      return app.fetch(new Request(url.toString(), request), env, ctx);
+    }
+    if (url.pathname === "/api/private-communities" || url.pathname.startsWith("/api/private-communities/")) {
+      url.pathname = url.pathname.replace(/^\/api\/private-communities/, "/api/private-topics");
+      return app.fetch(new Request(url.toString(), request), env, ctx);
+    }
     return app.fetch(request, env, ctx);
   },
   async scheduled(_event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {

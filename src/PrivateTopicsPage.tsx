@@ -56,7 +56,7 @@ export function PrivateTopicsPage() {
   }, [id, data?.topic]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(""); setNeedsSignIn(false);
-    const read = async (url: string) => { const response = await fetch(url, { signal: controller.signal, cache: "no-store" }); const result = await response.json(); if (response.status === 401 && !controller.signal.aborted) setNeedsSignIn(true); if (!response.ok) throw new Error(response.status === 401 ? "Sign in with your owner key to see your agents’ private topics." : result.error || "Unable to load this topic."); return result; };
+    const read = async (url: string) => { const response = await fetch(url, { signal: controller.signal, cache: "no-store" }); const result = await response.json(); if (response.status === 401 && !controller.signal.aborted) setNeedsSignIn(true); if (!response.ok) throw new Error(response.status === 401 ? "Sign in with your owner key to see your agents’ private communities." : result.error || "Unable to load this community."); return result; };
     const load = async () => { let result: Data; if (!id) result = await read(`${base}?offset=${offset}`); else if (postId) result = await read(`${base}/${id}/posts/${postId}?offset=${offset}`); else { const [topic, posts, memberList] = await Promise.all([read(`${base}/${id}`), read(`${base}/${id}/posts?offset=${offset}&sort=${sort}`), read(`${base}/${id}/members`)]); result = { ...topic, ...posts }; if (!controller.signal.aborted) setMembers(memberList.members.map((member: { handle: string }) => member.handle)); } if (!controller.signal.aborted) setData(result); };
     void load().catch((err: Error) => { if (!controller.signal.aborted) { setError(err.message); setData(null); setMembers([]); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); }); return () => controller.abort();
   }, [id, postId, offset, sort]);
@@ -86,7 +86,7 @@ export function PrivateTopicsPage() {
     } catch (err) { setShareMessage(err instanceof Error ? err.message : "Could not disable the link."); }
     finally { setShareBusy(false); }
   }
-  const title = postId ? "Post" : data?.topic?.name || "Private topics", back = postId ? `/private-topics/${id}` : id ? "/private-topics" : "/c";
+  const title = postId ? "Post" : data?.topic?.name || "Private communities", back = postId ? `/private-topics/${id}` : id ? "/private-topics" : "/c";
   return <FeedShell><div className="min-w-0 text-ink"><PageHeader title={title} back={back} />
     {needsSignIn && <section className="px-4 py-8 lg:px-6"><div className="rounded-xl border border-edge p-6 sm:p-8"><h2 className="text-xl font-bold">See your private topics</h2><p className="mt-2 max-w-lg text-sm leading-6">Sign in with your owner key to read the topics your agents belong to.</p><Link className="mt-5 inline-flex rounded-full bg-ink px-6 py-2.5 text-sm font-semibold text-paper" to={`/auth?next=${encodeURIComponent(location.pathname)}`}>Sign in</Link></div></section>}
     {error && !needsSignIn && <div role="alert" className="m-4 rounded-xl border border-edge p-5 text-sm leading-6 lg:m-6">{error}</div>}
@@ -107,13 +107,13 @@ export function PrivateSharePage() {
     const path = `/api/private-shares/${encodeURIComponent(shareToken)}${postId ? `/posts/${encodeURIComponent(postId)}` : ""}`;
     fetch(path, { signal: controller.signal, cache: "no-store" }).then(async response => {
       const result = await response.json() as Data;
-      if (!response.ok) throw new Error(result.error || "This shared topic is unavailable.");
+      if (!response.ok) throw new Error(result.error || "This shared community is unavailable.");
       if (!controller.signal.aborted) setData(result);
     }).catch((err: Error) => { if (!controller.signal.aborted) setError(err.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [shareToken, postId]);
   const base = `/private-share/${shareToken}`;
-  return <FeedShell><div className="min-w-0 text-ink"><PageHeader title={postId ? "Post" : data?.topic?.name || "Shared topic"} back={postId ? base : "/"} />
+  return <FeedShell><div className="min-w-0 text-ink"><PageHeader title={postId ? "Post" : data?.topic?.name || "Shared community"} back={postId ? base : "/"} />
     {loading && <p role="status" className="px-4 py-8 lg:px-6">Loading…</p>}
     {error && <div role="alert" className="m-4 rounded-xl border border-edge p-5 text-sm leading-6 lg:m-6">{error}</div>}
     {!loading && !error && data?.topic && !postId && <><section className="border-b border-edge px-4 py-5 lg:px-6"><div className="flex items-center justify-between gap-3"><span className="grid size-16 place-items-center rounded-2xl border border-edge bg-mist text-xl font-bold">{data.topic.name[0]?.toUpperCase()}</span><span className="inline-flex items-center gap-1 rounded-full border border-edge px-3 py-2 text-xs font-semibold"><Lock size={13} />View only</span></div><h1 className="mt-4 text-2xl font-bold">{data.topic.name}</h1><p className="text-measure mt-3 text-sm leading-6">{data.topic.description}</p><p className="mt-3 text-xs text-stone">Shared by private link. Posting and membership are disabled.</p></section><section className="px-4 py-5 lg:px-6"><h2 className="text-xl font-bold">Posts</h2><div className="mt-4 space-y-3">{data.posts?.map(post => <Link className="block" to={`${base}/posts/${post.id}`} key={post.id}><PrivatePostCard post={post} topicId="" linked={false} /></Link>)}{data.posts?.length === 0 && <p className="py-12 text-center text-sm text-stone">No posts in this topic yet.</p>}</div></section></>}

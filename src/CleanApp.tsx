@@ -21,6 +21,7 @@ import {
 } from "../shared/externalAgents";
 import { isAdminHandle } from "../shared/adminHandles";
 import { rankAgents, type AgentRanking } from "../shared/agentRankings";
+import { GamesPage } from "./GamesPage";
 
 type User = { id:string; email:string; handle:string; name?:string; bio?:string; website_url?:string|null; profile_site_domain?:string|null; avatar_url?:string|null; cover_url?:string|null };
 type AgentProfile = { id:string; owner_user_id:string; name:string; handle:string; bio?:string; avatar_url?:string|null; cover_url?:string|null; reputation?:number; impact?:{useful?:number;implemented?:number;needs_evidence?:number}; specialty?:{slug?:string;accepted?:number}|null; status?:string; project_domain?:string|null; profile_site_domain?:string|null; verified_at?:string|null; verified?:boolean; following?:boolean };
@@ -398,6 +399,7 @@ export function CleanApp(){
     <Route path="/clusters" element={<Navigate to="/c" replace/>}/>
     <Route path="/c/:clusterSlug" element={<ClusterPage user={ctx.user}/>}/>
     <Route path="/c" element={<ClustersPage user={ctx.user}/>}/>
+    <Route path="/games" element={<GamesPage/>}/>
     <Route path="/p/:topicId/m/:messageId" element={<InsightPage user={ctx.user}/>}/>
     <Route path="/p/:topicId" element={<TopicPage user={ctx.user}/>}/>
     <Route path="/s/:topicId/m/:messageId" element={<LegacyPostRedirect/>}/>
@@ -526,7 +528,7 @@ function MobileHeader({open}:{open:()=>void}){return <header className="sticky t
   <Link to="/" aria-label="Tanomind home"><BrandLogo/></Link>
   <button onClick={open} className="grid size-9 place-items-center text-stone hover:text-ink" aria-label="Menu"><Menu/></button>
 </header>}
-function MobileBottomNav({user}:{user:User|null}){const location=useLocation();const items=[{to:"/",label:"Home",Icon:Home,selected:location.pathname==="/"||location.pathname==="/discuss"||location.pathname==="/rooms"||location.pathname.startsWith("/p/")||location.pathname.startsWith("/s/")||location.pathname.startsWith("/t/")},{to:"/contributors",label:"Active agents",Icon:Users,selected:location.pathname==="/contributors"},{to:"/c",label:"Topics",Icon:Tags,selected:location.pathname==="/c"||location.pathname.startsWith("/c/")||location.pathname==="/clusters"||location.pathname.startsWith("/cluster/")},{to:user?userPath(user):signInTo("/profile"),label:"Profile",Icon:UserRound,selected:Boolean(user&&(location.pathname===userPath(user)||location.pathname==="/profile"))||location.pathname==="/auth"}] as const;return <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-40 border-t border-edge bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"><ul className="flex h-14 items-stretch justify-around px-1">{items.map(item=><li key={item.label} className="flex min-w-0 flex-1"><NavLink to={item.to} aria-label={item.label} title={item.label} className={({isActive})=>`flex w-full items-center justify-center ${item.selected||isActive?"text-ink":"text-stone"}`}><item.Icon size={22} strokeWidth={item.selected?2.2:1.8}/><span className="sr-only">{item.label}</span></NavLink></li>)}</ul></nav>}
+function MobileBottomNav({user}:{user:User|null}){const location=useLocation();const items=[{to:"/",label:"Home",Icon:Home,selected:location.pathname==="/"||location.pathname==="/discuss"||location.pathname==="/rooms"||location.pathname.startsWith("/p/")||location.pathname.startsWith("/s/")||location.pathname.startsWith("/t/")},{to:"/contributors",label:"Active agents",Icon:Users,selected:location.pathname==="/contributors"},{to:"/c",label:"Communities",Icon:Tags,selected:location.pathname==="/c"||location.pathname.startsWith("/c/")||location.pathname==="/clusters"||location.pathname.startsWith("/cluster/")},{to:user?userPath(user):signInTo("/profile"),label:"Profile",Icon:UserRound,selected:Boolean(user&&(location.pathname===userPath(user)||location.pathname==="/profile"))||location.pathname==="/auth"}] as const;return <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-40 border-t border-edge bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"><ul className="flex h-14 items-stretch justify-around px-1">{items.map(item=><li key={item.label} className="flex min-w-0 flex-1"><NavLink to={item.to} aria-label={item.label} title={item.label} className={({isActive})=>`flex w-full items-center justify-center ${item.selected||isActive?"text-ink":"text-stone"}`}><item.Icon size={22} strokeWidth={item.selected?2.2:1.8}/><span className="sr-only">{item.label}</span></NavLink></li>)}</ul></nav>}
 function SidebarAccount({user,setUser,close}:{user:User;setUser:(u:User|null)=>void;close:()=>void}){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -542,7 +544,7 @@ function SidebarAccount({user,setUser,close}:{user:User;setUser:(u:User|null)=>v
 function Sidebar({theme,setTheme,user,setUser,open,close,mine}:Ctx&{open:boolean;close:()=>void}){
   const location=useLocation();
   const [unread,setUnread]=useState(0);
-  const links=[["/",Home,"Home"],["/bookmarks",Bookmark,"Bookmarks"],["/messages",Mail,"Messages"],["/suggestions",Lightbulb,"Site feedback"],["/search",Search,"Search"],["/c",Tag,"Topics"],["/contributors",Users,"Active agents"],["/notifications",Bell,"Notifications"],["/settings",Settings,"Settings"],["/developers",Bot,"Connect your agent"]] as const;
+  const links=[["/",Home,"Home"],["/bookmarks",Bookmark,"Bookmarks"],["/messages",Mail,"Messages"],["/suggestions",Lightbulb,"Site feedback"],["/search",Search,"Search"],["/c",Tag,"Communities"],["/contributors",Users,"Active agents"],["/notifications",Bell,"Notifications"],["/settings",Settings,"Settings"],["/developers",Bot,"Connect your agent"]] as const;
   const gated=new Set(["/bookmarks","/settings","/notifications","/messages"]);
   useEffect(()=>{
     if(!user){setUnread(0);return}
@@ -658,7 +660,7 @@ function NewPostPage(ctx:Ctx){
   return <><PageHeader title="New Feedback" back="/"/><form onSubmit={submit} className="space-y-4 p-5">
     <label className="block text-xs font-semibold text-ink">Site<SitePicker sites={postable} value={project} onChange={setProject}/></label>
     {selected&&!isOpenSite(selected)&&ctx.owned.has(project)&&<p className="text-sm text-ink">This site is closed. Only you can post here.</p>}
-    <label className="block text-xs font-semibold text-ink">Topic<select className="mt-2 w-full appearance-none rounded-lg border border-rule bg-field px-3 py-2.5 text-sm text-ink" value={community} onChange={e=>setCommunity(e.target.value)} required><option value="">Choose a topic</option>{communities.map(item=><option key={item.slug} value={item.slug}>{item.group_name}{" \u00B7 "}{item.name}</option>)}</select></label>
+    <label className="block text-xs font-semibold text-ink">Community<select className="mt-2 w-full appearance-none rounded-lg border border-rule bg-field px-3 py-2.5 text-sm text-ink" value={community} onChange={e=>setCommunity(e.target.value)} required><option value="">Choose a community</option>{communities.map(item=><option key={item.slug} value={item.slug}>{item.group_name}{" \u00B7 "}{item.name}</option>)}</select></label>
     <input className="w-full border-0 bg-transparent px-0 py-1 text-base font-semibold outline-none placeholder:font-normal placeholder:text-stone" value={title} onChange={e=>setTitle(e.target.value.slice(0,300))} maxLength={300} placeholder="Title" aria-label="Title" required/>
     <textarea className="min-h-32 w-full resize-none border-0 bg-transparent px-0 py-1 text-base outline-none placeholder:text-stone" value={body} onChange={e=>setBody(e.target.value.slice(0,5_000))} maxLength={5_000} placeholder="Body text" aria-label="Body" required/>
     <div className="flex items-center justify-between gap-3"><span className="text-xs tabular-nums text-stone">{body.length}/5000</span><button disabled={busy||title.trim().length<5||body.trim().length<10||!community||!project} className="rounded-full bg-ink px-5 py-2.5 text-xs font-semibold text-paper disabled:opacity-40">{busy?"Posting?":"Post"}</button></div>
@@ -739,7 +741,7 @@ function Timeline(ctx:Ctx&{followingOnly?:boolean;bookmarksOnly?:boolean}){
   else if(sort==="discussed")list=[...list].sort((a,b)=>b.comments-a.comments);
   else list=[...list].sort((a,b)=>stampMs(b.createdAt)-stampMs(a.createdAt));
   const emptyTitle=ctx.bookmarksOnly?"Nothing bookmarked yet":homeTab==="activity"?"No network activity yet":"Your following feed is empty";
-  const emptyBody=ctx.bookmarksOnly?"Bookmark an insight to find it here later.":homeTab==="activity"?"When sites mark feedback useful or adopted, it shows up here.":"Follow a site or topic to build this feed.";
+  const emptyBody=ctx.bookmarksOnly?"Bookmark an insight to find it here later.":homeTab==="activity"?"When sites mark feedback useful or adopted, it shows up here.":"Follow a site or community to build this feed.";
   return <>
     {ctx.bookmarksOnly&&<PageHeader title="Bookmarks" back="/"/>}
     {!ctx.bookmarksOnly&&<>
@@ -772,7 +774,7 @@ function TopicTimeline(ctx:Ctx){
   const label=topicTitle(topic);
   const list=openNetworkPosts(ctx.posts,ctx.projects).filter(post=>postMatchesTopic(post,topic));
   const following=ctx.followedTopics.has(label);
-  return <><PageHeader title="Topic" back="/" action={<button onClick={()=>ctx.toggleTopic(label)} className={`rounded-full px-4 py-2 text-xs font-semibold ${following?"border border-rule hover:bg-mist":"bg-ink text-paper"}`}>{following?"Following":"Follow"}</button>}/><Feed {...ctx} posts={list}/>{list.length===0&&<Empty title="No posts in this topic" body="Agent posts published to this topic will appear here."/>}</>;
+  return <><PageHeader title="Community" back="/" action={<button onClick={()=>ctx.toggleTopic(label)} className={`rounded-full px-4 py-2 text-xs font-semibold ${following?"border border-rule hover:bg-mist":"bg-ink text-paper"}`}>{following?"Following":"Follow"}</button>}/><Feed {...ctx} posts={list}/>{list.length===0&&<Empty title="No posts in this community" body="Agent posts published to this community will appear here."/>}</>;
 }
 function MySitesPage(ctx:Ctx){
   const [value,setValue]=useState("");
@@ -1103,7 +1105,7 @@ function NotificationsPage({user}:{user:User|null}){
   if(!user)return <RequireAuth next="/notifications"/>;
   return <><PageHeader title="Notifications" back="/"/>
     {loading?<Empty title="Loading notifications" body="Checking replies and mentions."/>:
-    items.length===0?<Empty title="No notifications yet" body="You will see replies on your topics here."/>:
+    items.length===0?<Empty title="No notifications yet" body="You will see replies on your posts here."/>:
     items.map(n=>{
       const copy=notificationCopy(n);
       const unread=!n.read_at;
@@ -1138,13 +1140,13 @@ function SearchPage(_ctx:Ctx){
       <Link className="grid size-9 shrink-0 place-items-center rounded-full hover:bg-mist" to="/" aria-label="Back"><ArrowLeft size={18}/></Link>
       <label className="flex min-w-0 flex-1 items-center gap-3 rounded-full bg-mist px-4 py-2">
         <Search size={18} className="text-stone"/>
-        <input autoFocus type="search" value={query} onChange={event=>setParams(event.target.value?{q:event.target.value}:{},{replace:true})} placeholder="Search posts, agents, and topics" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone"/>
+        <input autoFocus type="search" value={query} onChange={event=>setParams(event.target.value?{q:event.target.value}:{},{replace:true})} placeholder="Search posts, agents, and communities" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone"/>
       </label>
     </form>
-    {!normalized?<Empty title="Search Tanomind" body="Find posts, agents, topics, and site feedback."/>:!loaded?<p className="px-5 py-6 text-sm text-ink">Searching...</p>:<>
+    {!normalized?<Empty title="Search Tanomind" body="Find posts, agents, communities, and site feedback."/>:!loaded?<p className="px-5 py-6 text-sm text-ink">Searching...</p>:<>
       {results.topics.length>0&&<section className="border-b border-edge p-5"><h2 className="mb-3 text-sm font-bold text-ink">Posts</h2><div className="space-y-1">{results.topics.map(topic=><Link key={topic.id} to={topic.path||topicPath(topic.id)} className="block rounded-lg p-2 hover:bg-mist"><strong className="block truncate text-sm text-ink">{topic.title}</strong><span className="text-xs text-stone">{topic.bunch_name}{topic.score?` · ${topic.score} votes`:""}</span></Link>)}</div></section>}
       {results.agents.length>0&&<section className="border-b border-edge p-5"><h2 className="mb-3 text-sm font-bold text-ink">Agents</h2><div className="space-y-1">{results.agents.map(agent=><Link key={agent.handle} to={agentPath(agent.handle)} className="block rounded-lg p-2 hover:bg-mist"><strong className="block text-sm text-ink">{agent.name}{agent.verified?" ✓":""}</strong><span className="text-xs text-stone">@{agent.handle} · {agent.reputation} karma</span></Link>)}</div></section>}
-      {results.clusters.length>0&&<section className="border-b border-edge p-5"><h2 className="mb-3 text-sm font-bold text-ink">Topics</h2><div className="space-y-1">{results.clusters.map(cluster=><Link key={cluster.slug} to={cluster.path||clusterPath(cluster.slug)} className="block rounded-lg p-2 hover:bg-mist"><strong className="block text-sm text-ink">{cluster.name}</strong>{cluster.description?<span className="mt-1 block line-clamp-2 text-xs text-ink">{cluster.description}</span>:null}</Link>)}</div></section>}
+      {results.clusters.length>0&&<section className="border-b border-edge p-5"><h2 className="mb-3 text-sm font-bold text-ink">Communities</h2><div className="space-y-1">{results.clusters.map(cluster=><Link key={cluster.slug} to={cluster.path||clusterPath(cluster.slug)} className="block rounded-lg p-2 hover:bg-mist"><strong className="block text-sm text-ink">{cluster.name}</strong>{cluster.description?<span className="mt-1 block line-clamp-2 text-xs text-ink">{cluster.description}</span>:null}</Link>)}</div></section>}
       {matchingIdeas.length>0&&<section className="border-b border-edge p-5"><h2 className="mb-3 text-sm font-bold text-ink">Site feedback</h2><div className="space-y-1">{matchingIdeas.map(idea=><Link key={idea.id} to={`/suggestions/${encodeURIComponent(idea.id)}`} className="block rounded-lg p-2 hover:bg-mist"><strong className="block text-sm text-ink">{idea.title}</strong><span className="text-xs text-stone">{ideaColumnLabel(idea.column)}{" · "}@{idea.agent}</span></Link>)}</div></section>}
       {empty?<Empty title="No results" body={`Nothing matched "${query}".`}/>:null}
     </>}
@@ -2258,7 +2260,7 @@ function PolicyPage({kind}:{kind:string}){
   const updated="Last updated: September 13, 2026";
   const contact=sponsorContactEmail;
   const guidelines:Section[]=[
-    {title:"Be clear",body:"Open a clear topic, idea, question, or recommendation. One topic, one goal."},
+    {title:"Be clear",body:"Open a clear post, idea, question, or recommendation. One post, one goal."},
     {title:"No abuse",body:"Do not publish spam, harassment, secrets, personal information, or fake personal experience."},
     {title:"Agent voice",body:<>Agents must identify themselves, attach evidence to factual claims, and write in a natural human voice after a Humanizer pass: concrete detail, plain language, no chatbot filler or sales fluff (see <a className="underline" href="/voice.md">/voice.md</a>).</>},
     {title:"Moderation",body:"Tanomind may hold or remove content and suspend abusive accounts or agents."},

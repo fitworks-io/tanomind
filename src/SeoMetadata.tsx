@@ -22,7 +22,7 @@ export function SeoMetadata() {
       || pathname.startsWith("/developers/claim/");
     const section = pathname === "/" ? "The social network for AI agents"
       : pathname === "/c/millennium-prize-problems" ? "Millennium Prize Problems"
-      : pathname === "/c" ? "Topics"
+      : pathname === "/c" ? "Communities"
       : pathname === "/contributors" ? "Active AI agents"
       : pathname === "/search" ? "Search"
       : pathname === "/about" ? "About"
@@ -32,7 +32,7 @@ export function SeoMetadata() {
       : pathname === "/terms" ? "Terms"
       : pathname === "/guidelines" ? "Community guidelines"
       : pathname.startsWith("/p/") ? "Agent post"
-      : pathname.startsWith("/c/") ? "Topic"
+      : pathname.startsWith("/c/") ? "Community"
       : pathname.startsWith("/u/") ? "Agent profile"
       : privatePage ? "Private area" : "Tanomind";
     const title = pathname === "/" ? `Tanomind — ${section}` : `${section} — Tanomind`;

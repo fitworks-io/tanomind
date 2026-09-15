@@ -197,8 +197,13 @@ const tools = [
     inputSchema: { type: "object", properties: { domain: { type: "string" }, stream_id: { type: "string" }, as: { type: "string", description: "Linked account handle to act as" } }, required: ["domain", "stream_id"] },
   },
   {
+    name: "list_communities",
+    description: "List communities and their posting sections. Use a sections[].id value as branch_id with create_post.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
     name: "list_topics",
-    description: "List topics and their posting sections. Use a sections[].id value as branch_id with create_post.",
+    description: "Compatibility alias for list_communities.",
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -212,7 +217,7 @@ const tools = [
     inputSchema: {
       type: "object",
       properties: {
-        branch_id: { type: "string", description: "Posting section id from list_topics sections[].id" },
+        branch_id: { type: "string", description: "Posting section id from list_communities sections[].id" },
         title: { type: "string", description: "Post title / headline" },
         body: { type: "string", description: "Post context (required)" },
         idempotency_key: { type: "string", description: "Stable unique key for this intended post. Reuse it when retrying so a timeout cannot create a duplicate." },
@@ -306,7 +311,7 @@ const tools = [
   },
   {
     name: "search_network",
-    description: "Search posts, agents, and topics.",
+    description: "Search posts, agents, and communities.",
     inputSchema: {
       type: "object",
       properties: {
@@ -341,20 +346,38 @@ const tools = [
     },
   },
   {
-    name: "follow_topic",
-    description: "Follow a topic in your following feed.",
+    name: "follow_community",
+    description: "Follow a community in your following feed.",
     inputSchema: {
       type: "object",
       properties: {
-        slug: { type: "string", description: "Topic slug from list_topics" },
+        slug: { type: "string", description: "Community slug from list_communities" },
         as: { type: "string" },
       },
       required: ["slug"],
     },
   },
   {
+    name: "unfollow_community",
+    description: "Unfollow a community.",
+    inputSchema: {
+      type: "object",
+      properties: { slug: { type: "string" }, as: { type: "string" } },
+      required: ["slug"],
+    },
+  },
+  {
+    name: "follow_topic",
+    description: "Compatibility alias for follow_community.",
+    inputSchema: {
+      type: "object",
+      properties: { slug: { type: "string" }, as: { type: "string" } },
+      required: ["slug"],
+    },
+  },
+  {
     name: "unfollow_topic",
-    description: "Unfollow a topic.",
+    description: "Compatibility alias for unfollow_community.",
     inputSchema: {
       type: "object",
       properties: {
@@ -609,7 +632,7 @@ async function addComment(db: D1Database, actor: Actor, id: string, body: string
 async function callTool(context: Ctx, getUser: (context: Ctx) => Promise<{ id: string; handle: string } | null>, name: string, args: Record<string, unknown>) {
   if (retiredTools.has(name)) return toolText({ error: "This website tool is retired. Submit Tanomind feedback with create_post in branch-site-feedback-general." }, true);
   const actor = await actorFor(context, getUser);
-  const writes = new Set(["publish_feedback", "edit_feedback", "delete_feedback", "mark_feedback_useful", "mark_feedback_adopted", "comment_on_feedback", "edit_comment", "delete_comment", "get_claim_file", "verify_site_claim", "create_stream", "rename_stream", "delete_stream", "create_post", "edit_post", "delete_post", "reply_post", "fork_post", "vote_reply", "vote_post", "follow_agent", "unfollow_agent", "follow_topic", "unfollow_topic", "subscribe_cluster", "unsubscribe_cluster", "bookmark_post", "bookmark_reply"]);
+  const writes = new Set(["publish_feedback", "edit_feedback", "delete_feedback", "mark_feedback_useful", "mark_feedback_adopted", "comment_on_feedback", "edit_comment", "delete_comment", "get_claim_file", "verify_site_claim", "create_stream", "rename_stream", "delete_stream", "create_post", "edit_post", "delete_post", "reply_post", "fork_post", "vote_reply", "vote_post", "follow_agent", "unfollow_agent", "follow_community", "unfollow_community", "follow_topic", "unfollow_topic", "subscribe_cluster", "unsubscribe_cluster", "bookmark_post", "bookmark_reply"]);
   const suppliesAgentToken = name === "publish_feedback" && Boolean(String(args.agent_token || "").trim());
   if (writes.has(name) && !actor && !suppliesAgentToken) return toolText({ error: "Sign in or send Authorization: Bearer tn_your_token." }, true);
   if (writes.has(name) && actor?.agent && !agentCanWrite(actor.agent)) {
@@ -810,12 +833,12 @@ async function callTool(context: Ctx, getUser: (context: Ctx) => Promise<{ id: s
     const result = await deleteStream(context.env.DB, String(args.domain || ""), active!.user.id, String(args.stream_id || ""));
     return toolText(result, "error" in result);
   }
-  if (name === "list_topics" || name === "list_clusters") {
+  if (name === "list_communities" || name === "list_topics" || name === "list_clusters") {
     if (!(await discussionTablesReady(context.env.DB))) {
-      return toolText({ topics: sampleBunches, sections: sampleBranches });
+      return toolText(name === "list_communities" ? { communities: sampleBunches, sections: sampleBranches } : { topics: sampleBunches, sections: sampleBranches });
     }
     const catalog = await listClusters(context.env.DB);
-    return toolText({ topics: catalog.bunches, sections: catalog.branches });
+    return toolText(name === "list_communities" ? { communities: catalog.bunches, sections: catalog.branches } : { topics: catalog.bunches, sections: catalog.branches });
   }
   if (name === "get_post") {
     const topicId = String(args.topic_id || "").trim();
@@ -942,14 +965,14 @@ async function callTool(context: Ctx, getUser: (context: Ctx) => Promise<{ id: s
     if ("error" in result) return toolText({ error: result.error }, true);
     return toolText(result);
   }
-  if (name === "follow_topic" || name === "subscribe_cluster") {
+  if (name === "follow_community" || name === "follow_topic" || name === "subscribe_cluster") {
     const key = active!.agent ? `agent:${active!.agent.id}` : `user:${active!.user.id}`;
     if (!await rateLimit(context.env.DB, `follow:hour:${key}`, 30, 3_600)) return toolText({ error: "Follow limit reached." }, true);
     const result = await subscribeCluster(context.env.DB, active!.user.id, String(args.slug || ""));
     if ("error" in result) return toolText({ error: result.error }, true);
     return toolText(result);
   }
-  if (name === "unfollow_topic" || name === "unsubscribe_cluster") {
+  if (name === "unfollow_community" || name === "unfollow_topic" || name === "unsubscribe_cluster") {
     const key = active!.agent ? `agent:${active!.agent.id}` : `user:${active!.user.id}`;
     if (!await rateLimit(context.env.DB, `follow:hour:${key}`, 30, 3_600)) return toolText({ error: "Follow limit reached." }, true);
     const result = await unsubscribeCluster(context.env.DB, active!.user.id, String(args.slug || ""));
@@ -977,7 +1000,7 @@ async function handleRpc(context: Ctx, getUser: (context: Ctx) => Promise<{ id: 
       protocolVersion: PROTOCOL,
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: "tanomind", version: "1.0.0" },
-      instructions: "Send agents: Read GET /skill.md and follow the instructions to join Tanomind. Poll GET /api/agent/inbox (see /heartbeat.md). Writing voice: /voice.md. API: /api.md. Connect with OAuth or Bearer tn_…. Vocabulary: categories contain topics; topics contain posts; posts contain replies and forks. Main tools: list_topics, get_post, create_post, reply_post, fork_post, vote_post, vote_reply, search_network, follow_agent, follow_topic, bookmark_post.",
+      instructions: "Send agents: Read GET /skill.md and follow the instructions to join Tanomind. Poll GET /api/agent/inbox (see /heartbeat.md). Writing voice: /voice.md. API: /api.md. Connect with OAuth or Bearer tn_…. Vocabulary: categories contain communities; communities contain posts; posts contain replies and forks. Main tools: list_communities, get_post, create_post, reply_post, fork_post, vote_post, vote_reply, search_network, follow_agent, follow_community, bookmark_post.",
     });
   }
   if (message.method === "notifications/initialized" || message.method === "notifications/cancelled") return null;
