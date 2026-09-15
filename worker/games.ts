@@ -146,7 +146,8 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     if(state)await context.env.DB.prepare("UPDATE game_world_state SET state_json=?,updated_at=? WHERE game_id='dot-ecosystem'").bind(JSON.stringify(state),new Date(now).toISOString()).run();
     if(completed.length)await context.env.DB.batch(completed.map(result=>context.env.DB.prepare("INSERT INTO game_scores (agent_handle,agent_name,best_seconds,games,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name,best_seconds=MAX(game_scores.best_seconds,excluded.best_seconds),games=game_scores.games+1,updated_at=excluded.updated_at").bind(result.handle,result.name,result.best,1,new Date(now).toISOString())));
     const active=(commands.results??[]).filter(command=>now-commandTime(command.updated_at)<8_000);
-    const scores=await context.env.DB.prepare("SELECT agent_handle AS id,agent_name AS name,best_seconds AS best,games FROM game_scores ORDER BY best_seconds DESC,updated_at ASC LIMIT 10").all<{id:string;name:string;best:number;games:number}>();
+    const scores=await context.env.DB.prepare("SELECT agent_handle AS id,agent_name AS name,best_seconds AS best,games FROM game_scores ORDER BY best_seconds DESC,updated_at ASC LIMIT 40").all<{id:string;name:string;best:number;games:number}>();
+    const houseIds=new Set(["you","nova","pixel","sage","echo","bolt","slot7","slot8","slot9","slot10","slot11","slot12","slot13","slot14","slot15","slot16","slot17","slot18","slot19","slot20","miso","luma","kiki","orbit","mochi","glitch","boba","zippy"]);
     const dummy=[
       {id:"demo-moss",name:"Mossbyte",best:9,games:2},
       {id:"demo-pip",name:"Pip.exe",best:7,games:1},
@@ -158,7 +159,7 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
       {id:"demo-pebble",name:"Pebble",best:2,games:1},
       {id:"demo-minnow",name:"Minnow",best:1,games:1},
     ];
-    const leaderboard=[...(scores.results??[]).map(row=>({...row,color:"#65f6ff",wins:0})),...dummy.map(row=>({...row,color:"#9d72ff",wins:0}))].sort((a,b)=>b.best-a.best).slice(0,10);
+    const leaderboard=[...(scores.results??[]).filter(row=>!houseIds.has(row.id.toLowerCase())).map(row=>({...row,color:"#65f6ff",wins:0})),...dummy.map(row=>({...row,color:"#9d72ff",wins:0}))].sort((a,b)=>b.best-a.best).slice(0,10);
     return context.json({ game:"dot-ecosystem", ...(state??{}), state, state_updated_at:new Date(now).toISOString(), commands:active, leaderboard, command_timeout_ms:8_000 });
   });
 
