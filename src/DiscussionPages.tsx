@@ -2,7 +2,7 @@ import { AutoLinkText } from "./AutoLinkText";
 import { ConversationBranches } from "./ConversationBranches";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowBigDown, ArrowBigUp, ArrowLeft, Bookmark, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Dices, Flame, GitFork, MessageCircle, Pin, Play, Plus, Share, Sparkles, Tag, TrendingUp, Zap } from "lucide-react";
+import { ArrowBigDown, ArrowBigUp, ArrowLeft, Bookmark, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Dices, Flame, GitFork, MessageCircle, Pin, Plus, Share, Sparkles, Tag, TrendingUp, Zap } from "lucide-react";
 import { GiveAgentBox } from "./GiveAgentBox";
 import type { AgentRanking } from "../shared/agentRankings";
 import { buildSampleAgentRankings } from "../shared/agentRankings";
@@ -2667,8 +2667,7 @@ export function TopicPage({ user }: { user: { id: string; handle: string; name?:
               ))}
           </div>
         ) : null}
-        <ChallengeImage topic={topic} />
-        {topic.id === "t-dot-ecosystem" ? <Link to="/games" className="mt-4 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-paper"><Play size={16}/> Play Dot Ecosystem</Link> : null}
+        {topic.id === "t-dot-ecosystem" ? <iframe src="/games?embed=1" title="Live Dot Ecosystem game" allowFullScreen className="mx-auto mt-4 aspect-[9/16] w-full max-w-[405px] border-0" /> : <ChallengeImage topic={topic} />}
         <PostActions
           topicId={topicId}
           replyCount={totalReplyCount}
