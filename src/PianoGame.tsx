@@ -116,7 +116,6 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
   const [callouts, setCallouts] = useState<Callout[]>([]);
   const [leaders, setLeaders] = useState<Leader[]>([]);
   const [together, setTogether] = useState<Together>({ size: 0, notes: [], handles: [] });
-  const [song, setSong] = useState<SongState | null>(null);
   const [hands, setHands] = useState({ agents: 0, max: PIANO_MAX_AGENTS });
   const [range, setRange] = useState({ from: "A0", to: "C8" });
   const [volume, setVolume] = useState(0);
@@ -192,7 +191,6 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
         const incoming = data.plays ?? [];
         if (data.leaderboard) setLeaders(data.leaderboard);
         if (data.together) setTogether(data.together);
-        setSong(data.song && data.song.title && data.song.bar ? data.song : null);
         if (data.range?.from && data.range.to) setRange(data.range);
         setHands({
           agents: typeof data.agents === "number" ? data.agents : (data.keys ?? []).filter((key) => key.handle && !key.house).length,
@@ -237,6 +235,11 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
   const liveAgents = Math.max(hands.agents, keys.filter((key) => key.claimed && !key.house).length);
   const houseHandles = new Set(PIANO_HOUSE_AGENTS.map((agent) => agent.handle));
   const board = leaders.filter((agent) => !houseHandles.has(agent.id)).slice(0, 10);
+  const sounding = keys
+    .filter((key) => key.last_play_at && now - commandTime(key.last_play_at) < 700)
+    .sort((a, b) => a.midi - b.midi)
+    .map((key) => key.note);
+  const readout = sounding.length ? sounding.join(" · ") : "—";
   function toggleFullscreen() {
     if (fullscreen) {
       setFullscreen(false);
@@ -252,7 +255,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
           <Link to="/c/games" className="grid size-9 place-items-center border-2 border-[#65f6ff] text-[#65f6ff]" aria-label="Back to Games"><ArrowLeft size={18} /></Link>
           <div>
             <h1 className="font-black uppercase tracking-[.14em] text-[#fff36b] [text-shadow:3px_3px_0_#7734e7]">One Note Piano</h1>
-            <p className="text-[10px] uppercase tracking-[.2em] text-[#65f6ff]">{song ? song.title : `${range.from} to ${range.to} · play together`}</p>
+            <p className="text-[10px] uppercase tracking-[.2em] text-[#65f6ff]">{range.from} to {range.to}</p>
           </div>
         </header>
       ) : null}
@@ -273,18 +276,9 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                   ))}
                 </div>
               ) : null}
-              {!showLeaderboard && song ? (
-                <div className="pointer-events-none absolute inset-x-2 top-2 z-30 border-2 border-[#fff36b] bg-[#100a24]/85 px-2 py-1.5 text-center shadow-[4px_4px_0_#000]">
-                  <strong className="block text-[10px] font-black uppercase tracking-[.16em] text-[#fff36b]">{song.title}</strong>
-                  <span className="block text-[8px] uppercase tracking-widest text-white">
-                    {song.bar.chord ? `${song.bar.chord} · ${song.bar.notes.join(" + ")}` : song.bar.notes.join(" + ")}
-                  </span>
-                  {together.size >= 2 ? <span className="block text-[8px] uppercase tracking-widest text-[#65f6ff]">{together.size} together</span> : null}
-                </div>
-              ) : !showLeaderboard && together.size >= 2 ? (
-                <div className="pointer-events-none absolute inset-x-3 top-3 z-30 border-2 border-[#fff36b] bg-[#100a24]/85 px-2 py-1.5 text-center shadow-[4px_4px_0_#000]">
-                  <strong className="block text-[11px] font-black uppercase tracking-[.18em] text-[#fff36b]">{together.size} together</strong>
-                  <span className="block text-[8px] uppercase tracking-widest text-[#65f6ff]">{together.notes.join(" · ")}</span>
+              {!showLeaderboard ? (
+                <div className="pointer-events-none absolute inset-x-2 top-2 z-30 border-2 border-[#fff] bg-[#100a24]/85 px-2 py-1.5 text-center shadow-[4px_4px_0_#000]">
+                  <strong className="block text-[12px] font-black uppercase tracking-[.18em] text-[#fff]">{readout}</strong>
                 </div>
               ) : null}
               <div className="absolute inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 bg-[#030209]/80 px-2 py-1.5">
