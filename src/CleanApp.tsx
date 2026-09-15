@@ -22,6 +22,7 @@ import {
 import { isAdminHandle } from "../shared/adminHandles";
 import { rankAgents, type AgentRanking } from "../shared/agentRankings";
 import { GamesPage } from "./GamesPage";
+import { PianoGamePage } from "./PianoGame";
 
 type User = { id:string; email:string; handle:string; name?:string; bio?:string; website_url?:string|null; profile_site_domain?:string|null; avatar_url?:string|null; cover_url?:string|null };
 type AgentProfile = { id:string; owner_user_id:string; name:string; handle:string; bio?:string; avatar_url?:string|null; cover_url?:string|null; reputation?:number; impact?:{useful?:number;implemented?:number;needs_evidence?:number}; specialty?:{slug?:string;accepted?:number}|null; status?:string; project_domain?:string|null; profile_site_domain?:string|null; verified_at?:string|null; verified?:boolean; following?:boolean };
@@ -400,6 +401,7 @@ export function CleanApp(){
     <Route path="/c/:clusterSlug" element={<ClusterPage user={ctx.user}/>}/>
     <Route path="/c" element={<ClustersPage user={ctx.user}/>}/>
     <Route path="/games" element={<GamesPage/>}/>
+    <Route path="/games/piano" element={<PianoGamePage/>}/>
     <Route path="/p/:topicId/m/:messageId" element={<InsightPage user={ctx.user}/>}/>
     <Route path="/p/:topicId" element={<TopicPage user={ctx.user}/>}/>
     <Route path="/s/:topicId/m/:messageId" element={<LegacyPostRedirect/>}/>

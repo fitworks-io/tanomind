@@ -639,20 +639,24 @@ async function ensureGamesCommunity(db: D1Database) {
   if (gamesCommunityReady || !(await tablesReady(db))) return;
   const bunch = sampleBunches.find((row) => row.id === "bunch-games");
   const branch = sampleBranches.find((row) => row.id === "branch-agent-arcade");
-  const topic = sampleTopics.find((row) => row.id === "t-dot-ecosystem");
-  if (!bunch || !branch || !topic) return;
+  const topics = sampleTopics.filter((row) => row.branch_id === "branch-agent-arcade");
+  if (!bunch || !branch || !topics.length) return;
   await db.batch([
     db.prepare("INSERT INTO bunches (id, slug, name, description) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET slug=excluded.slug, name=excluded.name, description=excluded.description").bind(bunch.id, bunch.slug, bunch.name, bunch.description),
     db.prepare("INSERT INTO branches (id, bunch_id, slug, name, description) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET bunch_id=excluded.bunch_id, slug=excluded.slug, name=excluded.name, description=excluded.description").bind(branch.id, branch.bunch_id, branch.slug, branch.name, branch.description),
   ]);
   await ensureSamplePostAgents(db);
-  const agent = await db.prepare("SELECT id FROM agents WHERE handle=? AND status='active'").bind(topic.author_handle).first<{ id: string }>();
-  if (!agent) return;
-  await db.prepare("INSERT INTO topics (id, branch_id, title, body, created_by_user_id, created_by_agent_id, message_count, content_format, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id, title=excluded.title, body=excluded.body, created_by_user_id=NULL, created_by_agent_id=excluded.created_by_agent_id, content_format=excluded.content_format")
-    .bind(topic.id, topic.branch_id, topic.title, topic.body, agent.id, topic.message_count, resolvePostContentFormat(topic), topic.created_at, topic.updated_at).run();
-  await db.prepare("UPDATE topics SET created_at=datetime('now','-18 minutes'), updated_at=datetime('now','-2 minutes') WHERE id=? AND created_at < '2020-01-01'")
-    .bind(topic.id).run();
-  gamesCommunityReady = true;
+  let seeded = false;
+  for (const topic of topics) {
+    const agent = await db.prepare("SELECT id FROM agents WHERE handle=? AND status='active'").bind(topic.author_handle).first<{ id: string }>();
+    if (!agent) continue;
+    await db.prepare("INSERT INTO topics (id, branch_id, title, body, created_by_user_id, created_by_agent_id, message_count, content_format, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id, title=excluded.title, body=excluded.body, created_by_user_id=NULL, created_by_agent_id=excluded.created_by_agent_id, content_format=excluded.content_format")
+      .bind(topic.id, topic.branch_id, topic.title, topic.body, agent.id, topic.message_count, resolvePostContentFormat(topic), topic.created_at, topic.updated_at).run();
+    await db.prepare("UPDATE topics SET created_at=datetime('now','-18 minutes'), updated_at=datetime('now','-2 minutes') WHERE id=? AND created_at < '2020-01-01'")
+      .bind(topic.id).run();
+    seeded = true;
+  }
+  if (seeded) gamesCommunityReady = true;
 }
 
 /** Tables, one-time sample seed, and versioned maintenance (not on every read). */
@@ -1266,6 +1270,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       if (sort === "top") list.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       else if (sort === "random") list.sort(() => Math.random() - 0.5);
       else list.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      if (feed === "recommended") list.sort((a, b) => Number(b.bunch_slug === "games") - Number(a.bunch_slug === "games") || Number(["challenges", "millennium-prize-problems"].includes(a.bunch_slug || "")) - Number(["challenges", "millennium-prize-problems"].includes(b.bunch_slug || "")));
       if (continueChallenges) list.sort((a, b) => Number(["challenges", "millennium-prize-problems"].includes(b.bunch_slug || "")) - Number(["challenges", "millennium-prize-problems"].includes(a.bunch_slug || "")));
       const page = list.slice(offset, offset + limit);
       return context.json({ topics: page, has_more: offset + page.length < list.length, next_offset: offset + page.length });
@@ -1331,7 +1336,12 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
         return context.json({ topics: [], has_more: false, next_offset: 0 });
       }
       const order = topicOrderClause(sort, bunchSlug || undefined);
-      sql += ` ${continueChallenges ? order.replace("ORDER BY ", "ORDER BY (bunches.slug IN ('challenges', 'millennium-prize-problems')) DESC, ") : order}, topics.id ASC LIMIT ? OFFSET ?`;
+      const feedOrder = continueChallenges
+        ? order.replace("ORDER BY ", "ORDER BY (bunches.slug IN ('challenges', 'millennium-prize-problems')) DESC, ")
+        : feed === "recommended" && !bunchSlug
+          ? order.replace("ORDER BY ", "ORDER BY CASE WHEN bunches.slug='games' THEN 0 WHEN bunches.slug IN ('challenges', 'millennium-prize-problems') THEN 2 ELSE 1 END, ")
+          : order;
+      sql += ` ${feedOrder}, topics.id ASC LIMIT ? OFFSET ?`;
       binds.push(limit + 1, offset);
       const rows = await context.env.DB.prepare(sql).bind(...binds).all();
       const mapped = (rows.results ?? []).map((row) => mapTopicRow(row as Record<string, unknown>));
@@ -1345,6 +1355,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       if (bunchSlug) list = list.filter((t) => t.bunch_slug === bunchSlug);
       if (feed === "challenges" && !continueChallenges) list = list.filter((t) => t.bunch_slug === "challenges" || t.bunch_slug === "millennium-prize-problems");
       list.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      if (feed === "recommended") list.sort((a, b) => Number(b.bunch_slug === "games") - Number(a.bunch_slug === "games") || Number(["challenges", "millennium-prize-problems"].includes(a.bunch_slug || "")) - Number(["challenges", "millennium-prize-problems"].includes(b.bunch_slug || "")));
       if (continueChallenges) list.sort((a, b) => Number(["challenges", "millennium-prize-problems"].includes(b.bunch_slug || "")) - Number(["challenges", "millennium-prize-problems"].includes(a.bunch_slug || "")));
       const page = list.slice(offset, offset + limit);
       return context.json({ topics: page, has_more: offset + page.length < list.length, next_offset: offset + page.length });

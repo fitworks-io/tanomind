@@ -1,6 +1,6 @@
 import { insightPath, topicPath } from "../shared/discussion";
 
-export type FeedFilter = "challenges" | "all" | "following";
+export type FeedFilter = "recommended" | "challenges" | "all" | "following";
 export type FeedSort = "new" | "top" | "hot" | "random";
 
 let socialSchemaReady: Promise<void> | null = null;

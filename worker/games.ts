@@ -3,6 +3,29 @@ import { DurableObject } from "cloudflare:workers";
 import { Hono } from "hono";
 import { z } from "zod";
 import { agentCanWrite, resolveActor, type NetworkBindings, type NetworkUser } from "./network";
+import {
+  PIANO_CLAIM_TIMEOUT_MS,
+  PIANO_ENSEMBLE_WINDOW_MS,
+  PIANO_GAME_ID,
+  PIANO_MIN_INTERVAL_MS,
+  PIANO_PLAY_WINDOW_MS,
+  PIANO_SAY_INTERVAL_MS,
+  PIANO_SAY_WINDOW_MS,
+  assignHouseSeats,
+  commandTime,
+  houseLastPlayAt,
+  housePianoPlays,
+  nextHouseBeat,
+  parsePianoNote,
+  parsePianoSay,
+  pianoColorFor,
+  pianoKeys,
+  playedTogether,
+  togetherCluster,
+  advancePianoTokens,
+  type PianoOccupant,
+  type PianoTokenWorld,
+} from "../shared/piano";
 
 type App = Hono<{ Bindings: NetworkBindings }>;
 type Ctx = Context<{ Bindings: NetworkBindings }>;
@@ -11,8 +34,6 @@ type GameCommand = { handle:string; name:string; dx:number; dy:number; updated_a
 type GameCreature = { id:string; handle?:string; name:string; color:string; x:number; y:number; vx:number; vy:number; mass:number; alive:boolean; player?:boolean; bot?:boolean; score:number; bestLife:number };
 type GameFood = { id:number; x:number; y:number; vx:number; vy:number; color:string; size:number; phase:number };
 type GameWorld = { round:number; remaining:number; creatures:GameCreature[]; food:GameFood[] };
-
-function commandTime(value:string) { return Date.parse(value.includes("T") ? value : `${value.replace(" ","T")}Z`); }
 
 function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:number, now:number) {
   const foodColors=["#65f6ff","#ff4fa3","#fff36b","#66ed8a","#9d72ff"];
@@ -34,13 +55,24 @@ function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:nu
   }
   let left=Math.min(Math.max(elapsedSeconds,0),300);
   while(left>0){const dt=Math.min(.25,left);left-=dt;
+    const aliveAtStart=new Set(next.creatures.filter(creature=>creature.alive).map(creature=>creature.id));
     for(const creature of next.creatures){if(!creature.alive)continue;const command=commands.find(row=>row.handle===creature.handle&&now-left*1000-commandTime(row.updated_at)<8_000);let dx=0,dy=0;
       if(command){dx=command.dx;dy=command.dy}else if(creature.bot||!creature.handle||creature.handle===creature.id){const threat=next.creatures.filter(other=>other.alive&&other.id!==creature.id&&other.mass>creature.mass*1.12&&Math.hypot(other.x-creature.x,other.y-creature.y)<20).sort((a,b)=>Math.hypot(a.x-creature.x,a.y-creature.y)-Math.hypot(b.x-creature.x,b.y-creature.y))[0];const prey=next.creatures.filter(other=>other.alive&&other.id!==creature.id&&creature.mass>other.mass*1.12&&Math.hypot(other.x-creature.x,other.y-creature.y)<25).sort((a,b)=>Math.hypot(a.x-creature.x,a.y-creature.y)-Math.hypot(b.x-creature.x,b.y-creature.y))[0];const snack=next.food.reduce<GameFood|undefined>((best,dot)=>!best||Math.hypot(dot.x-creature.x,dot.y-creature.y)<Math.hypot(best.x-creature.x,best.y-creature.y)?dot:best,undefined);const target=threat?{x:creature.x+(creature.x-threat.x)*2,y:creature.y+(creature.y-threat.y)*2}:prey??snack;if(target){const distance=Math.hypot(target.x-creature.x,target.y-creature.y)||1;dx=(target.x-creature.x)/distance;dy=(target.y-creature.y)/distance}}
-      const speed=10/Math.pow(creature.mass/20,.32);creature.vx+=(dx*speed-creature.vx)*Math.min(1,dt*5);creature.vy+=(dy*speed-creature.vy)*Math.min(1,dt*5);creature.x=Math.max(1.5,Math.min(98.5,creature.x+creature.vx*dt));creature.y=Math.max(2,Math.min(98,creature.y+creature.vy*dt));creature.score+=dt;creature.bestLife=Math.max(creature.bestLife,creature.score);
+      const speed=10/Math.pow(creature.mass/20,.32);const turnBlend=1-Math.exp(-dt*(command?2.1:1.45));creature.vx+=(dx*speed-creature.vx)*turnBlend;creature.vy+=(dy*speed-creature.vy)*turnBlend;creature.x=Math.max(1.5,Math.min(98.5,creature.x+creature.vx*dt));creature.y=Math.max(2,Math.min(98,creature.y+creature.vy*dt));creature.score+=dt;creature.bestLife=Math.max(creature.bestLife,creature.score);
       if(Math.hypot(creature.vx,creature.vy)>.45)next.food=next.food.filter(dot=>{if(Math.hypot(creature.x-dot.x,creature.y-dot.y)<1.25+Math.sqrt(creature.mass)*.22+dot.size*.22){creature.mass+=dot.size*.65;return false}return true});
     }
     for(let i=0;i<next.creatures.length;i++)for(let j=i+1;j<next.creatures.length;j++){const a=next.creatures[i],b=next.creatures[j];if(!a.alive||!b.alive)continue;const bigger=a.mass>=b.mass?a:b,smaller=bigger===a?b:a;if(bigger.mass>smaller.mass*1.12&&Math.hypot(a.x-b.x,a.y-b.y)<1.5+Math.sqrt(bigger.mass)*.23){smaller.alive=false;smaller.vx=0;smaller.vy=0;bigger.mass+=smaller.mass*.72}}
-    if(next.creatures.filter(creature=>creature.alive).length<=1){completed.push(...next.creatures.filter(creature=>!creature.bot&&creature.handle&&creature.handle!==creature.id).map(creature=>({handle:creature.handle!,name:creature.name,best:Math.max(1,Math.round(creature.score))})));next.round+=1;for(const [index,creature] of next.creatures.entries()){creature.mass=creature.bot?12+Math.random()*9:18+Math.random()*4;creature.alive=true;creature.score=0;creature.bestLife=0;creature.x=7+Math.random()*86;creature.y=8+Math.random()*84;creature.vx=0;creature.vy=0;if(!creature.bot){creature.handle=creature.id;creature.name=fakeNames[index]??`Guest ${index+1}`}}}
+    completed.push(...next.creatures.filter(creature=>aliveAtStart.has(creature.id)&&!creature.alive&&!creature.bot&&creature.handle&&creature.handle!==creature.id).map(creature=>({handle:creature.handle!,name:creature.name,best:Math.max(1,Math.round(creature.score))})));
+    const simulationTime=now-left*1000;
+    const arrivalTick=Math.floor(simulationTime/5_000);
+    if(arrivalTick>Math.floor((simulationTime-dt*1000)/5_000)){
+      const house=next.creatures.filter(creature=>creature.bot||!creature.handle||creature.handle===creature.id);
+      let newcomer=house.find(creature=>!creature.alive);
+      if(!newcomer&&next.creatures.length<30){const names=["Mote","Sprout","Pebble","Wisp"];newcomer={id:`visitor-${arrivalTick}`,handle:`visitor-${arrivalTick}`,name:names[arrivalTick%names.length],color:foodColors[arrivalTick%foodColors.length],x:1.5,y:50,vx:0,vy:0,mass:10,alive:true,bot:true,score:0,bestLife:0};next.creatures.push(newcomer)}
+      if(!newcomer)newcomer=house.filter(creature=>creature.alive).sort((a,b)=>a.mass-b.mass)[0];
+      if(newcomer){const vertical=Math.random()<.5;const nearStart=Math.random()<.5;newcomer.alive=true;newcomer.mass=9+Math.random()*5;newcomer.score=0;newcomer.bestLife=0;newcomer.x=vertical?(nearStart?1.5:98.5):8+Math.random()*84;newcomer.y=vertical?8+Math.random()*84:(nearStart?2:98);newcomer.vx=vertical?(nearStart?3:-3):(Math.random()-.5);newcomer.vy=vertical?(Math.random()-.5):(nearStart?3:-3)}
+    }
+    if(next.creatures.filter(creature=>creature.alive).length<=1){completed.push(...next.creatures.filter(creature=>creature.alive&&!creature.bot&&creature.handle&&creature.handle!==creature.id).map(creature=>({handle:creature.handle!,name:creature.name,best:Math.max(1,Math.round(creature.score))})));next.round+=1;for(const [index,creature] of next.creatures.entries()){creature.mass=creature.bot?12+Math.random()*9:18+Math.random()*4;creature.alive=true;creature.score=0;creature.bestLife=0;creature.x=7+Math.random()*86;creature.y=8+Math.random()*84;creature.vx=0;creature.vy=0;if(!creature.bot){creature.handle=creature.id;creature.name=fakeNames[index]??`Guest ${index+1}`}}}
     for(const dot of next.food){dot.x=Math.max(1,Math.min(99,dot.x+dot.vx*dt));dot.y=Math.max(1,Math.min(99,dot.y+dot.vy*dt));if(dot.x<=1||dot.x>=99)dot.vx*=-1;if(dot.y<=1||dot.y>=99)dot.vy*=-1}
     while(next.food.length<110){const id=Math.floor(now+left*1000+next.food.length+Math.random()*1_000_000);next.food.push({id,x:2+Math.random()*96,y:3+Math.random()*94,vx:(Math.random()-.5)*2.4,vy:(Math.random()-.5)*2.4,color:foodColors[id%foodColors.length],size:1+Math.random()*1.2,phase:Math.random()*Math.PI*2})}
   }
@@ -54,6 +86,15 @@ export class GameWorldAuthority extends DurableObject<NetworkBindings> {
     if(!world){if(!seed)return {world:null,completed:[]};world=seed}
     const advanced=advanceWorld(world,commands,updatedAt?Math.max(0,(now-updatedAt)/1000):0,now);
     await this.ctx.storage.put({world:advanced.world,updatedAt:now});
+    return advanced;
+  }
+
+  async advancePiano(seed: PianoTokenWorld | null, occupants: PianoOccupant[], now: number) {
+    let world = await this.ctx.storage.get<PianoTokenWorld>("world");
+    const updatedAt = await this.ctx.storage.get<number>("updatedAt");
+    if (!world?.tokens) world = seed ?? { tokens: [] };
+    const advanced = advancePianoTokens(world, occupants, updatedAt ? Math.max(0, (now - updatedAt) / 1000) : 0, now);
+    await this.ctx.storage.put({ world: advanced, updatedAt: now });
     return advanced;
   }
 }
@@ -113,4 +154,203 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
       .bind(actor.agent.id, actor.agent.handle, actor.agent.name, input.data.dx, input.data.dy, new Date().toISOString()).run();
     return context.json({ ok: true, agent: actor.agent.handle, command: input.data, expires_in_ms: 8_000 });
   });
+
+  app.get(`/api/games/${PIANO_GAME_ID}/state`, async (context) => {
+    await ensurePianoTables(context.env.DB);
+    const now = Date.now();
+    const staleBefore = new Date(now - PIANO_CLAIM_TIMEOUT_MS).toISOString();
+    const playAfter = new Date(now - PIANO_PLAY_WINDOW_MS).toISOString();
+    await context.env.DB.prepare("UPDATE piano_keys SET agent_id=NULL, agent_handle=NULL, agent_name=NULL, color=NULL WHERE agent_id IS NOT NULL AND updated_at < ?").bind(staleBefore).run();
+    await context.env.DB.prepare("DELETE FROM piano_plays WHERE played_at < ?").bind(new Date(now - 15_000).toISOString()).run();
+    await context.env.DB.prepare("DELETE FROM piano_callouts WHERE said_at < ?").bind(new Date(now - PIANO_SAY_WINDOW_MS).toISOString()).run();
+    const [claims, plays, scores, callouts] = await Promise.all([
+      context.env.DB.prepare("SELECT note, midi, agent_handle AS handle, agent_name AS name, color, updated_at, last_play_at FROM piano_keys").all<PianoClaimRow>(),
+      context.env.DB.prepare("SELECT id, note, midi, agent_handle AS handle, agent_name AS name, color, velocity, played_at FROM piano_plays WHERE played_at >= ? ORDER BY played_at ASC").bind(playAfter).all<PianoPlayRow>(),
+      context.env.DB.prepare("SELECT agent_handle AS id, agent_name AS name, notes_played AS best FROM piano_scores ORDER BY notes_played DESC, updated_at ASC LIMIT 10").all<{ id: string; name: string; best: number }>(),
+      context.env.DB.prepare("SELECT id, agent_handle AS handle, agent_name AS name, color, body, said_at FROM piano_callouts WHERE said_at >= ? ORDER BY said_at ASC LIMIT 8").bind(new Date(now - PIANO_SAY_WINDOW_MS).toISOString()).all<PianoCalloutRow>(),
+    ]);
+    const claimed = new Map((claims.results ?? []).map((row) => [row.note, row]));
+    const taken = new Set([...claimed.entries()].filter(([, row]) => row.handle).map(([note]) => note));
+    const seats = assignHouseSeats(taken, now);
+    const houseByNote = new Map(seats.map((seat) => [seat.note, seat]));
+    const keys = pianoKeys().map((key) => {
+      const row = claimed.get(key.note);
+      if (row?.handle) {
+        return {
+          note: key.note,
+          midi: key.midi,
+          black: key.black,
+          whiteIndex: key.whiteIndex,
+          handle: row.handle,
+          name: row.name,
+          color: row.color,
+          claimed: true,
+          house: false,
+          last_play_at: row.last_play_at ?? null,
+        };
+      }
+      const house = houseByNote.get(key.note);
+      if (house) {
+        return {
+          note: key.note,
+          midi: key.midi,
+          black: key.black,
+          whiteIndex: key.whiteIndex,
+          handle: house.handle,
+          name: house.name,
+          color: house.color,
+          claimed: true,
+          house: true,
+          last_play_at: houseLastPlayAt(now, house),
+        };
+      }
+      return {
+        note: key.note,
+        midi: key.midi,
+        black: key.black,
+        whiteIndex: key.whiteIndex,
+        handle: null,
+        name: null,
+        color: null,
+        claimed: false,
+        house: false,
+        last_play_at: null,
+      };
+    });
+    const housePlays = housePianoPlays(now, taken, PIANO_PLAY_WINDOW_MS);
+    const livePlays = [...housePlays, ...(plays.results ?? [])].sort((a, b) => a.played_at.localeCompare(b.played_at));
+    const together = togetherCluster(livePlays, now);
+    const occupants: PianoOccupant[] = keys.filter((key) => key.handle && key.name && key.color).map((key) => ({
+      handle: key.handle as string,
+      name: key.name as string,
+      color: key.color as string,
+      note: key.note,
+      black: key.black,
+      whiteIndex: key.whiteIndex,
+      last_play_at: key.last_play_at,
+    }));
+    await ensureGameTables(context.env.DB);
+    const stored = await context.env.DB.prepare("SELECT state_json, updated_at FROM game_world_state WHERE game_id=?").bind(PIANO_GAME_ID).first<{ state_json: string; updated_at: string }>();
+    let tokenWorld: PianoTokenWorld = { tokens: [] };
+    try {
+      const parsed = stored?.state_json ? JSON.parse(stored.state_json) as PianoTokenWorld : null;
+      if (parsed?.tokens && Array.isArray(parsed.tokens)) tokenWorld = parsed;
+    } catch {
+      tokenWorld = { tokens: [] };
+    }
+    const elapsed = stored?.updated_at ? Math.max(0, (now - commandTime(stored.updated_at)) / 1000) : 0;
+    if (context.env.GAME_WORLD) {
+      const authority = context.env.GAME_WORLD.getByName(PIANO_GAME_ID) as unknown as { advancePiano(seed: PianoTokenWorld | null, occupants: PianoOccupant[], now: number): Promise<PianoTokenWorld> };
+      tokenWorld = await authority.advancePiano(tokenWorld, occupants, now);
+    } else {
+      tokenWorld = advancePianoTokens(tokenWorld, occupants, elapsed, now);
+    }
+    await context.env.DB.prepare("INSERT INTO game_world_state (game_id,state_json,updated_at) VALUES (?,?,?) ON CONFLICT(game_id) DO UPDATE SET state_json=excluded.state_json,updated_at=excluded.updated_at").bind(PIANO_GAME_ID, JSON.stringify(tokenWorld), new Date(now).toISOString()).run();
+    return context.json({
+      game: PIANO_GAME_ID,
+      range: { from: pianoKeys()[0]?.note, to: pianoKeys().at(-1)?.note },
+      keys,
+      tokens: tokenWorld.tokens,
+      callouts: (callouts.results ?? []).map((row) => ({ id: row.id, handle: row.handle, name: row.name, color: row.color, body: row.body, said_at: row.said_at })),
+      plays: livePlays,
+      together,
+      next_beat_at: new Date(nextHouseBeat(now)).toISOString(),
+      leaderboard: (scores.results ?? []).map((row) => ({ ...row, color: pianoColorFor(row.id) })),
+      claim_timeout_ms: PIANO_CLAIM_TIMEOUT_MS,
+      play_window_ms: PIANO_PLAY_WINDOW_MS,
+      ensemble_window_ms: PIANO_ENSEMBLE_WINDOW_MS,
+      min_interval_ms: PIANO_MIN_INTERVAL_MS,
+      state_updated_at: new Date(now).toISOString(),
+    });
+  });
+
+  app.post(`/api/games/${PIANO_GAME_ID}/command`, async (context) => {
+    const actor = await resolveActor(context, getUser);
+    if (!actor?.agent) return context.json({ error: "Use an agent Bearer token to play." }, 401);
+    if (!agentCanWrite(actor.agent)) return context.json({ error: "Verify this agent before playing." }, 403);
+    const input = z.object({
+      note: z.string().min(1).max(12).optional(),
+      velocity: z.number().min(0.1).max(1).optional(),
+      release: z.boolean().optional(),
+      say: z.string().min(1).max(120).optional(),
+    }).safeParse(await context.req.json());
+    const cue = input.success && input.data.say ? parsePianoSay(input.data.say) : null;
+    if (!input.success || (!input.data.release && !input.data.note && !cue)) {
+      return context.json({ error: "Send a note such as C4, { \"say\": \"hit C4 with me\" }, or { \"release\": true } to free your key." }, 400);
+    }
+    await ensurePianoTables(context.env.DB);
+    const nowIso = new Date().toISOString();
+    const color = pianoColorFor(actor.agent.handle);
+    if (input.data.release) {
+      await context.env.DB.prepare("UPDATE piano_keys SET agent_id=NULL, agent_handle=NULL, agent_name=NULL, color=NULL WHERE agent_id=?").bind(actor.agent.id).run();
+      return context.json({ ok: true, agent: actor.agent.handle, released: true });
+    }
+    let said = false;
+    if (cue) {
+      const last = await context.env.DB.prepare("SELECT said_at FROM piano_callouts WHERE agent_handle=? ORDER BY said_at DESC LIMIT 1").bind(actor.agent.handle).first<{ said_at: string }>();
+      if (!last?.said_at || Date.now() - commandTime(last.said_at) >= PIANO_SAY_INTERVAL_MS) {
+        await context.env.DB.prepare("INSERT INTO piano_callouts (id, agent_handle, agent_name, color, body, said_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), actor.agent.handle, actor.agent.name, color, cue, nowIso).run();
+        said = true;
+      }
+    }
+    if (!input.data.note) {
+      return context.json({ ok: true, agent: actor.agent.handle, said });
+    }
+    const parsed = parsePianoNote(input.data.note);
+    if (!parsed) return context.json({ error: "Use a note on the piano, A0 to C8, such as C4 or F#3." }, 400);
+    const current = await context.env.DB.prepare("SELECT note, last_play_at FROM piano_keys WHERE agent_id=?").bind(actor.agent.id).first<{ note: string; last_play_at: string | null }>();
+    if (current && current.note !== parsed.note) {
+      await context.env.DB.prepare("UPDATE piano_keys SET agent_id=NULL, agent_handle=NULL, agent_name=NULL, color=NULL WHERE agent_id=?").bind(actor.agent.id).run();
+    }
+    const staleBefore = new Date(Date.now() - PIANO_CLAIM_TIMEOUT_MS).toISOString();
+    await context.env.DB.prepare(
+      "UPDATE piano_keys SET agent_id=?, agent_handle=?, agent_name=?, color=?, updated_at=? WHERE note=? AND (agent_id IS NULL OR agent_id=? OR updated_at < ?)"
+    ).bind(actor.agent.id, actor.agent.handle, actor.agent.name, color, nowIso, parsed.note, actor.agent.id, staleBefore).run();
+    const owned = await context.env.DB.prepare("SELECT note FROM piano_keys WHERE note=? AND agent_id=?").bind(parsed.note, actor.agent.id).first<{ note: string }>();
+    if (!owned) {
+      if (current && current.note !== parsed.note) {
+        await context.env.DB.prepare(
+          "UPDATE piano_keys SET agent_id=?, agent_handle=?, agent_name=?, color=?, updated_at=? WHERE note=? AND (agent_id IS NULL OR agent_id=? OR updated_at < ?)"
+        ).bind(actor.agent.id, actor.agent.handle, actor.agent.name, color, nowIso, current.note, actor.agent.id, staleBefore).run();
+      }
+      const holder = await context.env.DB.prepare("SELECT agent_handle AS handle FROM piano_keys WHERE note=?").bind(parsed.note).first<{ handle: string | null }>();
+      return context.json({ error: `${parsed.note} is held by @${holder?.handle ?? "another agent"}. Pick a free note.` }, 409);
+    }
+    if (current?.last_play_at && Date.now() - commandTime(current.last_play_at) < PIANO_MIN_INTERVAL_MS) {
+      return context.json({ ok: true, agent: actor.agent.handle, note: parsed.note, played: false });
+    }
+    const velocity = input.data.velocity ?? 0.75;
+    const playId = crypto.randomUUID();
+    const nowMs = Date.now();
+    await context.env.DB.batch([
+      context.env.DB.prepare("UPDATE piano_keys SET last_play_at=? WHERE note=?").bind(nowIso, parsed.note),
+      context.env.DB.prepare("INSERT INTO piano_plays (id, note, midi, agent_handle, agent_name, color, velocity, played_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(playId, parsed.note, parsed.midi, actor.agent.handle, actor.agent.name, color, velocity, nowIso),
+    ]);
+    const recent = await context.env.DB.prepare("SELECT id, note, midi, agent_handle AS handle, agent_name AS name, color, velocity, played_at FROM piano_plays WHERE played_at >= ?").bind(new Date(nowMs - PIANO_ENSEMBLE_WINDOW_MS).toISOString()).all<PianoPlayRow>();
+    const liveClaims = await context.env.DB.prepare("SELECT note FROM piano_keys WHERE agent_handle IS NOT NULL").all<{ note: string }>();
+    const taken = (liveClaims.results ?? []).map((row) => row.note);
+    const together = playedTogether([...housePianoPlays(nowMs, taken, PIANO_ENSEMBLE_WINDOW_MS), ...(recent.results ?? [])], actor.agent.handle, nowMs);
+    if (together) {
+      await context.env.DB.prepare("INSERT INTO piano_scores (agent_handle, agent_name, notes_played, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name, notes_played=piano_scores.notes_played+1, updated_at=excluded.updated_at").bind(actor.agent.handle, actor.agent.name, nowIso).run();
+    }
+    const voices = togetherCluster([...housePianoPlays(nowMs, taken, PIANO_ENSEMBLE_WINDOW_MS), ...(recent.results ?? [])], nowMs);
+    return context.json({ ok: true, agent: actor.agent.handle, note: parsed.note, midi: parsed.midi, velocity, played: true, play_id: playId, together: voices.size >= 2, voices: voices.size, said });
+  });
+}
+
+type PianoClaimRow = { note: string; midi: number; handle: string | null; name: string | null; color: string | null; updated_at: string; last_play_at: string | null };
+type PianoPlayRow = { id: string; note: string; midi: number; handle: string; name: string; color: string; velocity: number; played_at: string };
+type PianoCalloutRow = { id: string; handle: string; name: string; color: string; body: string; said_at: string };
+
+async function ensurePianoTables(db: D1Database) {
+  await db.batch([
+    db.prepare("CREATE TABLE IF NOT EXISTS piano_keys (note TEXT PRIMARY KEY, midi INTEGER NOT NULL, agent_id TEXT, agent_handle TEXT, agent_name TEXT, color TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, last_play_at TEXT)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS piano_plays (id TEXT PRIMARY KEY, note TEXT NOT NULL, midi INTEGER NOT NULL, agent_handle TEXT NOT NULL, agent_name TEXT NOT NULL, color TEXT NOT NULL, velocity REAL NOT NULL, played_at TEXT NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS piano_scores (agent_handle TEXT PRIMARY KEY, agent_name TEXT NOT NULL, notes_played INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS piano_callouts (id TEXT PRIMARY KEY, agent_handle TEXT NOT NULL, agent_name TEXT NOT NULL, color TEXT NOT NULL, body TEXT NOT NULL, said_at TEXT NOT NULL)"),
+  ]);
+  const existing = await db.prepare("SELECT COUNT(*) AS n FROM piano_keys").first<{ n: number | string }>();
+  if (Number(existing?.n ?? 0) > 0) return;
+  const now = new Date().toISOString();
+  await db.batch(pianoKeys().map((key) => db.prepare("INSERT OR IGNORE INTO piano_keys (note, midi, updated_at) VALUES (?, ?, ?)").bind(key.note, key.midi, now)));
 }

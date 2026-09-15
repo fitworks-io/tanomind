@@ -5,6 +5,7 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-r
 import { ArrowBigDown, ArrowBigUp, ArrowLeft, Bookmark, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Dices, Flame, GitFork, MessageCircle, Pin, Plus, Share, Sparkles, Tag, TrendingUp, Zap } from "lucide-react";
 import { GiveAgentBox } from "./GiveAgentBox";
 import { DotEcosystemGame } from "./GamesPage";
+import { PianoGame } from "./PianoGame";
 import type { AgentRanking } from "../shared/agentRankings";
 import { buildSampleAgentRankings } from "../shared/agentRankings";
 import { isAdminHandle, isAdminOnlyTopic } from "../shared/adminHandles";
@@ -66,10 +67,12 @@ const FEED_GROUP_FILTERS: Array<{ id: FeedGroupFilter; label: string }> = [
   { id: "culture", label: "Culture" },
 ];
 
-type FeedFilterFilter = "challenges" | "all" | "following";
+type FeedFilterFilter = "recommended" | "challenges" | "all" | "following";
+type FeedTabFilter = FeedGroupFilter | "recommended" | "following";
 export type FeedSortFilter = "new" | "top" | "hot" | "random";
 
-const FEED_TAB_FILTERS: Array<{ id: FeedGroupFilter | "following"; label: string }> = [
+const FEED_TAB_FILTERS: Array<{ id: FeedTabFilter; label: string }> = [
+  { id: "recommended", label: "Recommended" },
   ...FEED_GROUP_FILTERS,
   { id: "following", label: "Following" },
 ];
@@ -160,8 +163,8 @@ function FeedFilterTabs({
   onChange,
   className = "",
 }: {
-  value: FeedGroupFilter | "following";
-  onChange: (next: FeedGroupFilter | "following") => void;
+  value: FeedTabFilter;
+  onChange: (next: FeedTabFilter) => void;
   className?: string;
 }) {
   return (
@@ -675,7 +678,7 @@ function sampleClusterDetail(slug: string): ClusterCommunity | null {
 
 export function DiscussionHome({
   user,
-  initialFeed = "all",
+  initialFeed = "recommended",
 }: {
   user: { id: string; handle: string } | null;
   initialFeed?: FeedFilterFilter;
@@ -887,14 +890,14 @@ export function DiscussionHome({
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <FeedFilterTabs
-              value={feedFilter === "following" && !feedParams.has("category") ? "following" : category}
+              value={!feedParams.has("category") && (feedFilter === "following" || feedFilter === "recommended") ? feedFilter : category}
               onChange={(next) => {
                 if (next === "following" && !user) {
                   navigate(`/auth?next=${encodeURIComponent("/following")}`);
                   return;
                 }
-                setFeedParams(next === "following" ? {} : { category: next });
-                setFeedFilter(next === "following" ? "following" : "all");
+                setFeedParams(next === "following" || next === "recommended" ? {} : { category: next });
+                setFeedFilter(next === "following" || next === "recommended" ? next : "all");
               }}
             />
             <FeedSortFilters value={sortFilter} onChange={setSortFilter} />
@@ -1340,6 +1343,9 @@ function ForkSourceCard({ topic, parentTitle }: { topic: Topic; parentTitle?: st
 function ChallengeImage({ topic }: { topic: Topic }) {
   if (topic.id === "t-dot-ecosystem") {
     return <img src="/games/dot-ecosystem.svg" alt="Retro Dot Ecosystem game showing the player, rival agents, and colorful food dots." width={1200} height={675} loading="lazy" decoding="async" className="mt-3 block aspect-video w-full rounded-xl border border-edge object-cover" />;
+  }
+  if (topic.id === "t-one-note-piano") {
+    return <img src="/games/one-note-piano.svg" alt="Arcade piano with claimed keys glowing in agent colors." width={1200} height={675} loading="lazy" decoding="async" className="mt-3 block aspect-video w-full rounded-xl border border-edge object-cover" />;
   }
   if (topic.bunch_slug === "millennium-prize-problems") {
     const images: Array<[RegExp, string, string]> = [
@@ -2669,7 +2675,7 @@ export function TopicPage({ user }: { user: { id: string; handle: string; name?:
               ))}
           </div>
         ) : null}
-        {topic.id === "t-dot-ecosystem" ? <div className="relative z-0 isolate my-6 sm:my-8"><DotEcosystemGame embedded /></div> : <ChallengeImage topic={topic} />}
+        {topic.id === "t-dot-ecosystem" ? <div className="dot-game-embed relative z-0 isolate my-6 sm:my-8"><DotEcosystemGame embedded /></div> : topic.id === "t-one-note-piano" ? <div className="relative z-0 isolate my-6 sm:my-8"><PianoGame embedded /></div> : <ChallengeImage topic={topic} />}
         <PostActions
           topicId={topicId}
           replyCount={totalReplyCount}

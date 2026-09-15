@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#25194d" stroke-width="1"/></pattern>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="675" fill="#030209"/>
+  <rect width="1200" height="675" fill="url(#grid)"/>
+  <rect x="14" y="14" width="1172" height="647" fill="none" stroke="#7734e7" stroke-width="8"/>
+  <text x="45" y="60" fill="#fff36b" font-family="monospace" font-size="27" font-weight="bold" letter-spacing="4">ONE NOTE PIANO</text>
+  <text x="45" y="91" fill="#65f6ff" font-family="monospace" font-size="14" letter-spacing="3">ONE AGENT PER KEY</text>
+  <g transform="translate(90,190)">
+    <rect x="0" y="0" width="1020" height="360" fill="#12081f" stroke="#7734e7" stroke-width="6"/>
+    <g fill="#f4efe4" stroke="#2b1f58" stroke-width="2">
+      <rect x="24" y="36" width="64" height="288" rx="6"/>
+      <rect x="88" y="36" width="64" height="288" rx="6"/>
+      <rect x="152" y="36" width="64" height="288" rx="6"/>
+      <rect x="216" y="36" width="64" height="288" rx="6"/>
+      <rect x="280" y="36" width="64" height="288" rx="6"/>
+      <rect x="344" y="36" width="64" height="288" rx="6"/>
+      <rect x="408" y="36" width="64" height="288" rx="6"/>
+      <rect x="472" y="36" width="64" height="288" rx="6"/>
+      <rect x="536" y="36" width="64" height="288" rx="6"/>
+      <rect x="600" y="36" width="64" height="288" rx="6"/>
+      <rect x="664" y="36" width="64" height="288" rx="6"/>
+      <rect x="728" y="36" width="64" height="288" rx="6"/>
+      <rect x="792" y="36" width="64" height="288" rx="6"/>
+      <rect x="856" y="36" width="64" height="288" rx="6"/>
+      <rect x="920" y="36" width="64" height="288" rx="6"/>
+    </g>
+    <g filter="url(#glow)">
+      <rect x="24" y="36" width="64" height="288" rx="6" fill="#fff6d8" stroke="#fff36b" stroke-width="3"/>
+      <rect x="472" y="36" width="64" height="288" rx="6" fill="#e8fff4" stroke="#66ed8a" stroke-width="3"/>
+      <rect x="792" y="36" width="64" height="288" rx="6" fill="#f4e8ff" stroke="#9d72ff" stroke-width="3"/>
+    </g>
+    <g fill="#12081c" stroke="#000" stroke-width="2">
+      <rect x="68" y="36" width="42" height="168" rx="4"/>
+      <rect x="132" y="36" width="42" height="168" rx="4"/>
+      <rect x="260" y="36" width="42" height="168" rx="4"/>
+      <rect x="324" y="36" width="42" height="168" rx="4"/>
+      <rect x="388" y="36" width="42" height="168" rx="4"/>
+      <rect x="516" y="36" width="42" height="168" rx="4"/>
+      <rect x="580" y="36" width="42" height="168" rx="4"/>
+      <rect x="708" y="36" width="42" height="168" rx="4"/>
+      <rect x="772" y="36" width="42" height="168" rx="4"/>
+      <rect x="836" y="36" width="42" height="168" rx="4"/>
+    </g>
+    <rect x="516" y="36" width="42" height="168" rx="4" fill="#ff4fa3" stroke="#ff4fa3" stroke-width="2" filter="url(#glow)"/>
+    <text x="56" y="300" fill="#241b4b" font-family="monospace" font-size="13" font-weight="bold">PIP</text>
+    <text x="488" y="300" fill="#241b4b" font-family="monospace" font-size="13" font-weight="bold">NORI</text>
+    <text x="804" y="300" fill="#241b4b" font-family="monospace" font-size="13" font-weight="bold">TAVI</text>
+    <text x="524" y="188" fill="#fff" font-family="monospace" font-size="16" font-weight="bold">F</text>
+  </g>
+</svg>
