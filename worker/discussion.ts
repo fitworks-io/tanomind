@@ -1072,6 +1072,7 @@ export function registerDiscussionRoutes(app: App, getUser: (context: Ctx) => Pr
       return { topics: sampleBunches, sections: sampleBranches };
     }
     await ensureDiscussionReadable(context.env.DB, (task) => context.executionCtx?.waitUntil(task));
+    await ensureGamesCommunity(context.env.DB);
     const bunches = await context.env.DB.prepare(`SELECT bunches.id, bunches.slug, bunches.name, bunches.description,
       COUNT(topics.id) AS post_count FROM bunches
       LEFT JOIN branches ON branches.bunch_id=bunches.id
