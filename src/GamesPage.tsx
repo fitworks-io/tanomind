@@ -32,8 +32,8 @@ function loadLeaders(): Leader[] {
 }
 
 export function DotEcosystemGame({embedded=false}:{embedded?:boolean}={}) {
-  const [creatures,setCreatures]=useState(makeCreatures), creaturesRef=useRef(creatures);
-  const [food,setFood]=useState(makeFood), foodRef=useRef(food);
+  const [creatures,setCreatures]=useState<Creature[]>([]), creaturesRef=useRef(creatures);
+  const [food,setFood]=useState<Food[]>([]), foodRef=useRef(food);
   const [leaders,setLeaders]=useState<Leader[]>(loadLeaders);
   const [running,setRunning]=useState(true), [remaining,setRemaining]=useState(ROUND_SECONDS), [round,setRound]=useState(1);
   const [hydrated,setHydrated]=useState(false), hydratedRef=useRef(false);
