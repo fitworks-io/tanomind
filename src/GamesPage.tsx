@@ -9,7 +9,7 @@ type Food = { id: number; x: number; y: number; vx: number; vy: number; color: s
 type Leader = { id: string; name: string; color: string; wins: number; best: number; games: number };
 type AgentCommand = { handle: string; name: string; dx: number; dy: number; updated_at: string };
 type SavedWorld = { round:number; remaining:number; creatures:Creature[]; food:Food[] };
-const CREATURES = [["you","Open slot","#ffffff"],["nova","Open slot","#9d72ff"],["pixel","Open slot","#39dfff"],["sage","Open slot","#4bea72"],["echo","Open slot","#ff4fa3"],["bolt","Open slot","#ffe34f"],["slot7","Open slot","#ff925c"],["slot8","Open slot","#5affd2"],["slot9","Open slot","#ef70ff"],["slot10","Open slot","#75a3ff"],["slot11","Open slot","#d4ff65"],["slot12","Open slot","#ff657c"],["slot13","Open slot","#c093ff"],["slot14","Open slot","#62fff5"],["slot15","Open slot","#ffb35a"],["slot16","Open slot","#7bff9d"],["slot17","Open slot","#ff80aa"],["slot18","Open slot","#8ad8ff"],["slot19","Open slot","#e8ff76"],["slot20","Open slot","#cf86ff"]] as const;
+const CREATURES = [["you","Pico","#ffffff"],["nova","Nori","#9d72ff"],["pixel","Tavi","#39dfff"],["sage","Fenn","#4bea72"],["echo","Mika","#ff4fa3"],["bolt","Juno","#ffe34f"],["slot7","Rumi","#ff925c"],["slot8","Sola","#5affd2"],["slot9","Vex","#ef70ff"],["slot10","Nim","#75a3ff"],["slot11","Ollo","#d4ff65"],["slot12","Pippa","#ff657c"],["slot13","Yuki","#c093ff"],["slot14","Toto","#62fff5"],["slot15","Kumo","#ffb35a"],["slot16","Ami","#7bff9d"],["slot17","Rolo","#ff80aa"],["slot18","Nix","#8ad8ff"],["slot19","Mori","#e8ff76"],["slot20","Lilo","#cf86ff"]] as const;
 const BOTS = [["miso","Miso","#ff8a52"],["luma","Luma","#5dffbd"],["kiki","Kiki","#ff71df"],["orbit","Orbit","#72a7ff"],["mochi","Mochi","#c7ff58"],["glitch","Glitch","#ff596f"],["boba","Boba","#b58cff"],["zippy","Zippy","#53fff2"]] as const;
 const FOOD_COLORS = ["#65f6ff","#ff4fa3","#fff36b","#66ed8a","#9d72ff"];
 const STORAGE_KEY = "tanomind.ecosystem-leaderboard.v1";
@@ -92,17 +92,15 @@ export function DotEcosystemGame({embedded=false}:{embedded?:boolean}={}) {
       if(consumedFood.size)nextFood=nextFood.filter(dot=>!consumedFood.has(dot.id));
       for(const agent of next){
         if(!agent.alive)continue;let targetX=agent.x,targetY=agent.y;
-        if(agent.bot){
+        const command=commandsRef.current.get(agent.id);
+        if(!command){
           const threats=current.filter(other=>other.alive&&other.id!==agent.id&&other.mass>agent.mass*1.12&&Math.hypot(other.x-agent.x,other.y-agent.y)<20).sort((a,b)=>Math.hypot(a.x-agent.x,a.y-agent.y)-Math.hypot(b.x-agent.x,b.y-agent.y));
           const prey=current.filter(other=>other.alive&&other.id!==agent.id&&agent.mass>other.mass*1.15&&Math.hypot(other.x-agent.x,other.y-agent.y)<25).sort((a,b)=>Math.hypot(a.x-agent.x,a.y-agent.y)-Math.hypot(b.x-agent.x,b.y-agent.y));
           const snack=nextFood.slice().sort((a,b)=>Math.hypot(a.x-agent.x,a.y-agent.y)-Math.hypot(b.x-agent.x,b.y-agent.y))[0];
           if(threats[0]){targetX=agent.x+(agent.x-threats[0].x)*2;targetY=agent.y+(agent.y-threats[0].y)*2}
           else if(prey[0]){targetX=prey[0].x;targetY=prey[0].y}
           else if(snack){targetX=snack.x;targetY=snack.y}
-        }else{
-          const command=commandsRef.current.get(agent.id);
-          if(command){targetX=agent.x+command.dx*25;targetY=agent.y+command.dy*25}
-        }
+        }else{targetX=agent.x+command.dx*25;targetY=agent.y+command.dy*25}
         const dx=targetX-agent.x,dy=targetY-agent.y,distance=Math.hypot(dx,dy)||1,speed=10/Math.pow(agent.mass/20,.32);
         agent.vx+=((dx/distance)*speed-agent.vx)*Math.min(1,dt*5);agent.vy+=((dy/distance)*speed-agent.vy)*Math.min(1,dt*5);
         agent.x=Math.max(1.5,Math.min(98.5,agent.x+agent.vx*dt));agent.y=Math.max(2,Math.min(98,agent.y+agent.vy*dt));agent.score+=dt;agent.bestLife=Math.max(agent.bestLife,agent.score);

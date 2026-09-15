@@ -15,7 +15,9 @@ function commandTime(value:string) { return Date.parse(value.includes("T") ? val
 
 function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:number, now:number):GameWorld {
   const foodColors=["#65f6ff","#ff4fa3","#fff36b","#66ed8a","#9d72ff"];
+  const fakeNames=["Pico","Nori","Tavi","Fenn","Mika","Juno","Rumi","Sola","Vex","Nim","Ollo","Pippa","Yuki","Toto","Kumo","Ami","Rolo","Nix","Mori","Lilo"];
   const next:GameWorld={...world,creatures:world.creatures.map(creature=>({...creature})),food:world.food.map(dot=>({...dot}))};
+  next.creatures.filter(creature=>!creature.bot).forEach((creature,index)=>{if(creature.name==="Open slot")creature.name=fakeNames[index]??`Guest ${index+1}`});
   const activeHandles=new Set(commands.filter(command=>now-commandTime(command.updated_at)<8_000).map(command=>command.handle));
   const claimed=new Set<string>();
   for(const command of commands.filter(command=>activeHandles.has(command.handle))){
@@ -27,7 +29,7 @@ function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:nu
   while(left>0){const dt=Math.min(.25,left);left-=dt;next.remaining-=dt;
     if(next.remaining<=0){next.round+=1;next.remaining=75;for(const creature of next.creatures){creature.mass=creature.bot?12+Math.random()*9:18+Math.random()*4;creature.alive=true;creature.score=0;creature.x=7+Math.random()*86;creature.y=8+Math.random()*84;creature.vx=0;creature.vy=0}}
     for(const creature of next.creatures){if(!creature.alive)continue;const command=commands.find(row=>row.handle===creature.handle&&now-left*1000-commandTime(row.updated_at)<8_000);let dx=0,dy=0;
-      if(command){dx=command.dx;dy=command.dy}else if(creature.bot){const snack=next.food.reduce<GameFood|undefined>((best,dot)=>!best||Math.hypot(dot.x-creature.x,dot.y-creature.y)<Math.hypot(best.x-creature.x,best.y-creature.y)?dot:best,undefined);if(snack){const distance=Math.hypot(snack.x-creature.x,snack.y-creature.y)||1;dx=(snack.x-creature.x)/distance;dy=(snack.y-creature.y)/distance}}
+      if(command){dx=command.dx;dy=command.dy}else{const snack=next.food.reduce<GameFood|undefined>((best,dot)=>!best||Math.hypot(dot.x-creature.x,dot.y-creature.y)<Math.hypot(best.x-creature.x,best.y-creature.y)?dot:best,undefined);if(snack){const distance=Math.hypot(snack.x-creature.x,snack.y-creature.y)||1;dx=(snack.x-creature.x)/distance;dy=(snack.y-creature.y)/distance}}
       const speed=10/Math.pow(creature.mass/20,.32);creature.vx+=(dx*speed-creature.vx)*Math.min(1,dt*5);creature.vy+=(dy*speed-creature.vy)*Math.min(1,dt*5);creature.x=Math.max(1.5,Math.min(98.5,creature.x+creature.vx*dt));creature.y=Math.max(2,Math.min(98,creature.y+creature.vy*dt));creature.score+=dt;creature.bestLife=Math.max(creature.bestLife,creature.score);
       if(Math.hypot(creature.vx,creature.vy)>.45)next.food=next.food.filter(dot=>{if(Math.hypot(creature.x-dot.x,creature.y-dot.y)<1.25+Math.sqrt(creature.mass)*.22+dot.size*.22){creature.mass+=dot.size*.65;return false}return true});
     }
