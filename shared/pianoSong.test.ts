@@ -117,6 +117,10 @@ describe("piano song comments", () => {
     const plays = houseChartPlays(origin + 100, [], song, 500);
     expect(plays.map((play) => play.note).sort()).toEqual(["A3", "C5", "E4"]);
     expect(plays.every((play) => play.played_at === new Date(origin).toISOString())).toBe(true);
+
+    const arrangement = houseChartPlays(origin + 4_000, [], song, 4_000);
+    expect(arrangement.some((play) => play.velocity === 0.52)).toBe(true);
+    expect(arrangement.some((play) => play.velocity === 0.38)).toBe(true);
   });
 
   it("widens the ensemble window with pulse and names the 10 minute flip", () => {
@@ -127,6 +131,10 @@ describe("piano song comments", () => {
     expect(pianoActiveSongUntil(now)).toBe(Date.parse("2026-09-15T12:20:00Z") + PIANO_SONG_SLOT_MS);
     expect(formatPianoSlot(now)).toBe("2026-09-15T12:20:00Z");
     const live = pianoSongLive(now, [], proposal({}));
+    expect(live.seats).toHaveLength(10);
+    const voicesPerStrike = new Map<string, number>();
+    for (const play of live.plays) voicesPerStrike.set(play.played_at, (voicesPerStrike.get(play.played_at) ?? 0) + 1);
+    expect(Math.max(...voicesPerStrike.values())).toBeLessThan(live.seats.length);
     expect(live.ensembleWindow).toBe(700);
     expect(live.nextBeat).toBeGreaterThan(now);
   });

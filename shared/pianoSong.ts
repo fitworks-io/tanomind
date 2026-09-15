@@ -4,6 +4,7 @@ import {
   PIANO_PLAY_WINDOW_MS,
   assignChartSeats,
   assignHouseSeats,
+  assignSongHouseSeats,
   housePianoPlays,
   nextAgentBeat,
   nextHouseBeat,
@@ -135,6 +136,27 @@ export function houseChartPlays(now: number, takenNotes: Iterable<string>, song:
       });
     }
   }
+  for (const agent of PIANO_HOUSE_AGENTS) {
+    const firstMelody = agent.phaseMs + Math.ceil((start - agent.phaseMs) / agent.intervalMs) * agent.intervalMs;
+    for (let t = firstMelody; t <= now; t += agent.intervalMs) {
+      if (t < start || t < origin) continue;
+      const { bar } = pianoChartBarAt(song, t);
+      const chordHandles = new Set(assignChartSeats(taken, bar.notes, pulse, origin).map((seat) => seat.handle));
+      if (chordHandles.has(agent.handle)) continue;
+      const seat = assignSongHouseSeats(taken, bar.notes, pulse, origin, t).find((row) => row.handle === agent.handle);
+      if (!seat) continue;
+      plays.push({
+        id: `house-melody-${seat.handle}-${t}`,
+        note: seat.note,
+        midi: seat.midi,
+        handle: seat.handle,
+        name: seat.name,
+        color: seat.color,
+        velocity: 0.38,
+        played_at: new Date(t).toISOString(),
+      });
+    }
+  }
   return plays.sort((a, b) => a.played_at.localeCompare(b.played_at) || a.handle.localeCompare(b.handle));
 }
 
@@ -157,7 +179,7 @@ export function pianoSongLive(now: number, takenNotes: Iterable<string>, song: P
   const { bar } = pianoChartBarAt(song, now);
   const playWindow = Math.max(PIANO_PLAY_WINDOW_MS, song.pulseMs);
   return {
-    seats: assignChartSeats(takenNotes, bar.notes, song.pulseMs, song.slotAt),
+    seats: assignSongHouseSeats(takenNotes, bar.notes, song.pulseMs, song.slotAt, now),
     plays: houseChartPlays(now, takenNotes, song, playWindow),
     nextBeat: nextAgentBeat(now, song.slotAt, song.pulseMs),
     ensembleWindow: songEnsembleWindow(song.pulseMs),

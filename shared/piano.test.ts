@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { midiToNote, parsePianoNote, parsePianoSay, pianoKeys, assignHouseSeats, housePianoPlays, nextHouseBeat, playedTogether, togetherCluster, advancePianoTokens, pianoHouseQuota, PIANO_HIGH_MIDI, PIANO_LOW_MIDI, PIANO_HOUSE_AGENTS, PIANO_MAX_AGENTS, PIANO_SAY_MAX_CHARS } from "./piano";
+import { midiToNote, parsePianoNote, parsePianoSay, pianoKeys, assignHouseSeats, housePianoPlays, nextHouseBeat, playedTogether, togetherCluster, advancePianoTokens, pianoHouseQuota, pianoHouseScale, pianoMidiInScale, PIANO_HIGH_MIDI, PIANO_LOW_MIDI, PIANO_HOUSE_AGENTS, PIANO_HOUSE_KEY_MS, PIANO_MAX_AGENTS, PIANO_SAY_MAX_CHARS } from "./piano";
 
 describe("piano notes", () => {
   it("covers a full piano, A0 through C8", () => {
@@ -30,15 +30,15 @@ describe("piano notes", () => {
     expect(parsePianoNote("A#4")?.midi).toBe(70);
   });
 
-  it("seats four house agents on free keys and yields taken notes", () => {
+  it("seats ten house agents on free keys and yields taken notes", () => {
     const empty = assignHouseSeats([], 0);
-    expect(empty).toHaveLength(4);
-    expect(new Set(empty.map((seat) => seat.note)).size).toBe(4);
+    expect(empty).toHaveLength(10);
+    expect(new Set(empty.map((seat) => seat.note)).size).toBe(10);
     expect(empty.map((seat) => seat.note).slice().sort().join()).not.toBe("C3,C4,E3,G3");
     expect(empty.map((seat) => seat.handle)).toEqual(PIANO_HOUSE_AGENTS.map((agent) => agent.handle));
 
     const moved = assignHouseSeats(["C3", "E3"], 0);
-    expect(moved).toHaveLength(4);
+    expect(moved).toHaveLength(8);
     expect(moved.some((seat) => seat.note === "C3" || seat.note === "E3")).toBe(false);
 
     const full = assignHouseSeats(pianoKeys().map((key) => key.note), 0);
@@ -47,7 +47,7 @@ describe("piano notes", () => {
 
   it("caps the band at ten agents, like two hands", () => {
     expect(PIANO_MAX_AGENTS).toBe(10);
-    expect(pianoHouseQuota(0)).toBe(4);
+    expect(pianoHouseQuota(0)).toBe(10);
     expect(pianoHouseQuota(6)).toBe(4);
     expect(pianoHouseQuota(9)).toBe(1);
     expect(pianoHouseQuota(10)).toBe(0);
@@ -72,10 +72,21 @@ describe("piano notes", () => {
 
     const plays = housePianoPlays(12_000, [], 8_000);
     const notes = new Set(plays.map((play) => play.note));
-    const times = new Set(plays.map((play) => play.played_at));
-    expect(notes.size).toBeGreaterThan(4);
-    expect(times.size).toBe(plays.length);
+    const strikesPerBeat = new Map<string, number>();
+    for (const play of plays) strikesPerBeat.set(play.played_at, (strikesPerBeat.get(play.played_at) ?? 0) + 1);
+    expect(notes.size).toBeGreaterThan(10);
+    expect(Math.max(...strikesPerBeat.values())).toBeLessThan(PIANO_HOUSE_AGENTS.length);
     expect(plays.some((play) => play.note !== "C3" && play.note !== "E3" && play.note !== "G3" && play.note !== "C4")).toBe(true);
+  });
+
+  it("alternates A minor and C Hirajoshi every five minutes", () => {
+    const firstScale = pianoHouseScale(0);
+    const nextScale = pianoHouseScale(PIANO_HOUSE_KEY_MS);
+    expect(firstScale.name).toBe("A minor");
+    expect(nextScale.name).toBe("C Hirajoshi");
+    expect(pianoHouseScale(PIANO_HOUSE_KEY_MS * 2).name).toBe("A minor");
+    expect(assignHouseSeats([], 0).every((seat) => pianoMidiInScale(seat.midi, firstScale))).toBe(true);
+    expect(assignHouseSeats([], PIANO_HOUSE_KEY_MS).every((seat) => pianoMidiInScale(seat.midi, nextScale))).toBe(true);
   });
 
   it("scores a strike only when another voice is in the window", () => {
@@ -107,7 +118,7 @@ describe("piano notes", () => {
     }));
     const first = advancePianoTokens({ tokens: [] }, occupants, 1, 4_000);
     const again = advancePianoTokens({ tokens: [] }, occupants, 1, 4_000);
-    expect(first.tokens).toHaveLength(4);
+    expect(first.tokens).toHaveLength(10);
     expect(again.tokens).toEqual(first.tokens);
     const later = advancePianoTokens(first, occupants, 0.5, 4_500);
     expect(later.tokens.map((token) => token.handle)).toEqual(first.tokens.map((token) => token.handle));

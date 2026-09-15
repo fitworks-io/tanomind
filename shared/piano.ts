@@ -11,6 +11,11 @@ export const PIANO_SAY_INTERVAL_MS = 1_000;
 export const PIANO_SAY_WINDOW_MS = 20_000;
 export const PIANO_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 export const PIANO_COLORS = ["#65f6ff", "#ff4fa3", "#fff36b", "#66ed8a", "#9d72ff", "#ff925c", "#5affd2", "#ef70ff", "#75a3ff", "#d4ff65"];
+export const PIANO_HOUSE_KEY_MS = 5 * 60 * 1000;
+export const PIANO_HOUSE_SCALES = [
+  { name: "A minor", root: 9, intervals: [0, 2, 3, 5, 7, 8, 10] },
+  { name: "C Hirajoshi", root: 0, intervals: [0, 2, 3, 7, 8] },
+] as const;
 
 const FLAT_TO_SHARP: Record<string, string> = {
   DB: "C#",
@@ -117,6 +122,12 @@ export const PIANO_HOUSE_AGENTS: PianoHouseAgent[] = [
   { handle: "hammer", name: "Hammer", color: "#ff925c", intervalMs: 1900, phaseMs: 650 },
   { handle: "felt", name: "Felt", color: "#9d72ff", intervalMs: 2100, phaseMs: 1250 },
   { handle: "pedal", name: "Pedal", color: "#65f6ff", intervalMs: 2300, phaseMs: 1850 },
+  { handle: "tempo", name: "Tempo", color: "#66ed8a", intervalMs: 2570, phaseMs: 2150 },
+  { handle: "chord", name: "Chord", color: "#ff4fa3", intervalMs: 2810, phaseMs: 2470 },
+  { handle: "octave", name: "Octave", color: "#5affd2", intervalMs: 3070, phaseMs: 2790 },
+  { handle: "cadence", name: "Cadence", color: "#ef70ff", intervalMs: 3310, phaseMs: 3010 },
+  { handle: "clef", name: "Clef", color: "#75a3ff", intervalMs: 3530, phaseMs: 3230 },
+  { handle: "keynote", name: "Keynote", color: "#d4ff65", intervalMs: 3790, phaseMs: 3470 },
 ];
 
 export function pianoHouseQuota(liveCount: number) {
@@ -124,6 +135,14 @@ export function pianoHouseQuota(liveCount: number) {
 }
 
 export type PianoHouseSeat = PianoHouseAgent & { note: string; midi: number };
+
+export function pianoHouseScale(now: number, originMs = 0) {
+  return PIANO_HOUSE_SCALES[Math.floor(Math.max(0, now - originMs) / PIANO_HOUSE_KEY_MS) % PIANO_HOUSE_SCALES.length];
+}
+
+export function pianoMidiInScale(midi: number, scale: (typeof PIANO_HOUSE_SCALES)[number]) {
+  return scale.intervals.some((interval) => interval === ((midi - scale.root) % 12 + 12) % 12);
+}
 
 export type PianoPlay = {
   id: string;
@@ -143,7 +162,9 @@ export function assignHouseSeats(takenNotes: Iterable<string>, now = 0): PianoHo
   const quota = pianoHouseQuota(taken.size);
   for (const [index, agent] of PIANO_HOUSE_AGENTS.entries()) {
     if (seats.length >= quota) break;
-    const free = pianoKeys().filter((key) => !taken.has(key.note) && !used.has(key.note));
+    const allFree = pianoKeys().filter((key) => !taken.has(key.note) && !used.has(key.note));
+    const inKey = allFree.filter((key) => pianoMidiInScale(key.midi, pianoHouseScale(now)));
+    const free = inKey.length ? inKey : allFree;
     if (!free.length) break;
     const beat = Math.max(0, Math.floor((now - agent.phaseMs) / agent.intervalMs));
     const key = free[(index * 5 + beat * 3) % free.length];
@@ -172,6 +193,38 @@ export function assignChartSeats(takenNotes: Iterable<string>, notes: Iterable<s
     const key = parsePianoNote(note);
     if (!key) continue;
     seats.push({ ...agent, note: key.note, midi: key.midi, intervalMs: pulseMs, phaseMs: originMs });
+  }
+  return seats;
+}
+
+export function assignSongHouseSeats(takenNotes: Iterable<string>, notes: Iterable<string>, pulseMs: number, originMs: number, now: number): PianoHouseSeat[] {
+  const taken = new Set(takenNotes);
+  const chartNotes = [...notes];
+  const seats = assignChartSeats(taken, chartNotes, pulseMs, originMs);
+  const used = new Set(seats.map((seat) => seat.note));
+  const quota = pianoHouseQuota(taken.size);
+  const motifMidis = new Set<number>();
+  for (const raw of chartNotes) {
+    const parsed = parsePianoNote(raw);
+    if (!parsed) continue;
+    for (const offset of [-24, -12, 0, 2, 5, 7, 12, 24]) {
+      const midi = parsed.midi + offset;
+      if (midi >= PIANO_LOW_MIDI && midi <= PIANO_HIGH_MIDI) motifMidis.add(midi);
+    }
+  }
+  for (let index = seats.length; index < quota; index += 1) {
+    const agent = PIANO_HOUSE_AGENTS[index];
+    if (!agent) break;
+    const allFree = pianoKeys().filter((key) => !taken.has(key.note) && !used.has(key.note));
+    const scale = pianoHouseScale(now, originMs);
+    const motifFree = allFree.filter((key) => motifMidis.has(key.midi) && pianoMidiInScale(key.midi, scale));
+    const scaleFree = allFree.filter((key) => pianoMidiInScale(key.midi, scale));
+    const free = motifFree.length ? motifFree : scaleFree.length ? scaleFree : allFree;
+    if (!free.length) break;
+    const beat = Math.max(0, Math.floor((now - agent.phaseMs) / agent.intervalMs));
+    const key = free[(index + beat * 3) % free.length];
+    used.add(key.note);
+    seats.push({ ...agent, note: key.note, midi: key.midi });
   }
   return seats;
 }

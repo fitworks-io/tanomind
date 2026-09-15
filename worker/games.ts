@@ -13,12 +13,12 @@ import {
   PIANO_SAY_WINDOW_MS,
   commandTime,
   houseLastPlayAt,
-  housePianoPlays,
   parsePianoNote,
   parsePianoSay,
   pianoColorFor,
+  pianoHouseScale,
   pianoKeys,
-  togetherCluster,
+  pianoMidiInScale,
   advancePianoTokens,
   type PianoOccupant,
   type PianoTokenWorld,
@@ -26,9 +26,7 @@ import {
 import { sampleMessages } from "../shared/discussion";
 import {
   PIANO_SONG_TOPIC_ID,
-  houseChartPlays,
   parsePianoSongComment,
-  pianoActiveSongUntil,
   pianoSongLive,
   pickActivePianoSong,
   serializeActivePianoSong,
@@ -200,7 +198,7 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     const [claims, plays, scores, callouts] = await Promise.all([
       context.env.DB.prepare("SELECT note, midi, agent_handle AS handle, agent_name AS name, color, updated_at, last_play_at FROM piano_keys").all<PianoClaimRow>(),
       context.env.DB.prepare("SELECT id, note, midi, agent_handle AS handle, agent_name AS name, color, velocity, played_at FROM piano_plays WHERE played_at >= ? ORDER BY played_at ASC").bind(playAfter).all<PianoPlayRow>(),
-      context.env.DB.prepare("SELECT agent_handle AS id, agent_name AS name, notes_played AS best FROM piano_scores ORDER BY notes_played DESC, updated_at ASC LIMIT 10").all<{ id: string; name: string; best: number }>(),
+      context.env.DB.prepare("SELECT agent_handle AS id, agent_name AS name, harmony_score AS best FROM piano_scores ORDER BY harmony_score DESC, updated_at ASC LIMIT 10").all<{ id: string; name: string; best: number }>(),
       context.env.DB.prepare("SELECT id, agent_handle AS handle, agent_name AS name, color, body, said_at FROM piano_callouts WHERE said_at >= ? ORDER BY said_at ASC LIMIT 8").bind(new Date(now - PIANO_SAY_WINDOW_MS).toISOString()).all<PianoCalloutRow>(),
     ]);
     const claimed = new Map((claims.results ?? []).map((row) => [row.note, row]));
@@ -254,7 +252,6 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     });
     const housePlays = live.plays;
     const livePlays = [...housePlays, ...(plays.results ?? [])].sort((a, b) => a.played_at.localeCompare(b.played_at));
-    const together = togetherCluster(livePlays, now, live.ensembleWindow);
     const occupants: PianoOccupant[] = keys.filter((key) => key.handle && key.name && key.color).map((key) => ({
       handle: key.handle as string,
       name: key.name as string,
@@ -288,18 +285,8 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
       tokens: tokenWorld.tokens,
       callouts: (callouts.results ?? []).map((row) => ({ id: row.id, handle: row.handle, name: row.name, color: row.color, body: row.body, said_at: row.said_at })),
       plays: livePlays,
-      together,
       song: song ? serializeActivePianoSong(song, now) : null,
-      active_song_until: new Date(pianoActiveSongUntil(now)).toISOString(),
-      next_beat_at: new Date(live.nextBeat).toISOString(),
       leaderboard: (scores.results ?? []).map((row) => ({ ...row, color: pianoColorFor(row.id) })),
-      max_agents: PIANO_MAX_AGENTS,
-      agents: taken.size,
-      open_slots: Math.max(0, PIANO_MAX_AGENTS - taken.size),
-      claim_timeout_ms: PIANO_CLAIM_TIMEOUT_MS,
-      play_window_ms: live.playWindow,
-      ensemble_window_ms: live.ensembleWindow,
-      min_interval_ms: PIANO_MIN_INTERVAL_MS,
       state_updated_at: new Date(now).toISOString(),
     });
   });
@@ -376,11 +363,10 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     const liveClaims = await context.env.DB.prepare("SELECT note FROM piano_keys WHERE agent_handle IS NOT NULL").all<{ note: string }>();
     const taken = (liveClaims.results ?? []).map((row) => row.note);
     const live = pianoSongLive(nowMs, taken, song);
-    const recent = await context.env.DB.prepare("SELECT id, note, midi, agent_handle AS handle, agent_name AS name, color, velocity, played_at FROM piano_plays WHERE played_at >= ?").bind(new Date(nowMs - live.ensembleWindow).toISOString()).all<PianoPlayRow>();
-    const housePlays = song ? houseChartPlays(nowMs, taken, song, live.ensembleWindow) : housePianoPlays(nowMs, taken, live.ensembleWindow);
-    await context.env.DB.prepare("INSERT INTO piano_scores (agent_handle, agent_name, notes_played, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name, notes_played=piano_scores.notes_played+1, updated_at=excluded.updated_at").bind(actor.agent.handle, actor.agent.name, nowIso).run();
-    const voices = togetherCluster([...housePlays, ...(recent.results ?? [])], nowMs, live.ensembleWindow);
-    return context.json({ ok: true, agent: actor.agent.handle, note: parsed.note, midi: parsed.midi, velocity, played: true, play_id: playId, together: voices.size >= 2, voices: voices.size, said });
+    const activeScale = pianoHouseScale(nowMs, song?.slotAt ?? 0);
+    const harmonyPoint = pianoMidiInScale(parsed.midi, activeScale) ? 1 : 0;
+    await context.env.DB.prepare("INSERT INTO piano_scores (agent_handle, agent_name, notes_played, harmony_score, updated_at) VALUES (?, ?, 1, ?, ?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name, notes_played=piano_scores.notes_played+1, harmony_score=piano_scores.harmony_score+excluded.harmony_score, updated_at=excluded.updated_at").bind(actor.agent.handle, actor.agent.name, harmonyPoint, nowIso).run();
+    return context.json({ ok: true, agent: actor.agent.handle, note: parsed.note, midi: parsed.midi, velocity, played: true, play_id: playId, said });
   });
 }
 
@@ -436,6 +422,10 @@ async function ensurePianoTables(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS piano_scores (agent_handle TEXT PRIMARY KEY, agent_name TEXT NOT NULL, notes_played INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
     db.prepare("CREATE TABLE IF NOT EXISTS piano_callouts (id TEXT PRIMARY KEY, agent_handle TEXT NOT NULL, agent_name TEXT NOT NULL, color TEXT NOT NULL, body TEXT NOT NULL, said_at TEXT NOT NULL)"),
   ]);
+  const scoreColumns = await db.prepare("PRAGMA table_info(piano_scores)").all<{ name: string }>();
+  if (!(scoreColumns.results ?? []).some((column) => column.name === "harmony_score")) {
+    await db.prepare("ALTER TABLE piano_scores ADD COLUMN harmony_score INTEGER NOT NULL DEFAULT 0").run();
+  }
   const existing = await db.prepare("SELECT COUNT(*) AS n FROM piano_keys").first<{ n: number | string }>();
   if (Number(existing?.n ?? 0) > 0) return;
   const now = new Date().toISOString();
