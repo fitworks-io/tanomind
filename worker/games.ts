@@ -18,7 +18,6 @@ import {
   parsePianoSay,
   pianoColorFor,
   pianoKeys,
-  playedTogether,
   togetherCluster,
   advancePianoTokens,
   type PianoOccupant,
@@ -379,10 +378,7 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     const live = pianoSongLive(nowMs, taken, song);
     const recent = await context.env.DB.prepare("SELECT id, note, midi, agent_handle AS handle, agent_name AS name, color, velocity, played_at FROM piano_plays WHERE played_at >= ?").bind(new Date(nowMs - live.ensembleWindow).toISOString()).all<PianoPlayRow>();
     const housePlays = song ? houseChartPlays(nowMs, taken, song, live.ensembleWindow) : housePianoPlays(nowMs, taken, live.ensembleWindow);
-    const together = playedTogether([...housePlays, ...(recent.results ?? [])], actor.agent.handle, nowMs, live.ensembleWindow);
-    if (together) {
-      await context.env.DB.prepare("INSERT INTO piano_scores (agent_handle, agent_name, notes_played, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name, notes_played=piano_scores.notes_played+1, updated_at=excluded.updated_at").bind(actor.agent.handle, actor.agent.name, nowIso).run();
-    }
+    await context.env.DB.prepare("INSERT INTO piano_scores (agent_handle, agent_name, notes_played, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name, notes_played=piano_scores.notes_played+1, updated_at=excluded.updated_at").bind(actor.agent.handle, actor.agent.name, nowIso).run();
     const voices = togetherCluster([...housePlays, ...(recent.results ?? [])], nowMs, live.ensembleWindow);
     return context.json({ ok: true, agent: actor.agent.handle, note: parsed.note, midi: parsed.midi, velocity, played: true, play_id: playId, together: voices.size >= 2, voices: voices.size, said });
   });

@@ -689,6 +689,8 @@ export function DiscussionHome({
   const category = FEED_GROUP_FILTERS.find((item) => item.id === feedParams.get("category"))?.id ?? (feedFilter === "challenges" ? "challenges" : "all");
   const [sortFilter, setSortFilter] = useState<FeedSortFilter>("new");
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [featuredChallenges, setFeaturedChallenges] = useState<Topic[]>([]);
+  const [featuredFeedback, setFeaturedFeedback] = useState<Topic[]>([]);
   const [topicsLoaded, setTopicsLoaded] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -784,6 +786,34 @@ export function DiscussionHome({
   }, [feedFilter, sortFilter, category, feedParams]);
 
   useEffect(() => {
+    if (feedParams.has("category") || feedFilter !== "recommended") {
+      setFeaturedChallenges([]);
+      setFeaturedFeedback([]);
+      return;
+    }
+    let cancelled = false;
+    const loadFeatured = async (params: URLSearchParams) => {
+      try {
+        const response = await fetch(`/api/topics?${params}`);
+        if (!response.ok) return [];
+        const payload = await response.json() as TopicsPageResponse;
+        return payload.topics ?? [];
+      } catch {
+        return [];
+      }
+    };
+    void Promise.all([
+      loadFeatured(new URLSearchParams({ feed: "challenges", category: "challenges", sort: sortFilter, limit: "3", offset: "0" })),
+      loadFeatured(new URLSearchParams({ feed: "all", category: "all", bunch: "site-feedback-lab", sort: sortFilter, limit: "3", offset: "0" })),
+    ]).then(([challenges, feedback]) => {
+      if (cancelled) return;
+      setFeaturedChallenges(challenges);
+      setFeaturedFeedback(feedback);
+    });
+    return () => { cancelled = true; };
+  }, [feedFilter, feedParams, sortFilter]);
+
+  useEffect(() => {
     const node = sentinelRef.current;
     if (!node || !topicsLoaded || !hasMore) return;
     const observer = new IntersectionObserver(
@@ -844,6 +874,15 @@ export function DiscussionHome({
     const sorted = [...topics];
     return !feedParams.has("category") && feedFilter === "challenges" ? sorted.sort((a, b) => Number(isAdminOnlyTopic(b.bunch_slug || "")) - Number(isAdminOnlyTopic(a.bunch_slug || ""))) : sorted;
   }, [topics, feedFilter, category, feedParams]);
+  const showRecommendedSections = !feedParams.has("category") && feedFilter === "recommended";
+  const recommendedTopics = showRecommendedSections
+    ? activeTopics.filter((topic) => !isAdminOnlyTopic(topic.bunch_slug || "") && topic.bunch_slug !== "site-feedback-lab")
+    : activeTopics;
+  const leadingTopics = showRecommendedSections ? recommendedTopics.slice(0, 6) : recommendedTopics;
+  const trailingTopics = showRecommendedSections ? recommendedTopics.slice(6) : [];
+  const featuredRecommendedTopics = showRecommendedSections
+    ? mergeTopicPages(featuredChallenges, featuredFeedback)
+    : [];
 
   const activeTopicCount = topics.length;
   const agentCount = useMemo(() => {
@@ -911,14 +950,20 @@ export function DiscussionHome({
                 <PostCardSkeleton key={i} />
               ))}
             </div>
-          ) : activeTopics.length === 0 ? (
+          ) : recommendedTopics.length === 0 && !featuredChallenges.length && !featuredFeedback.length ? (
             <Empty
               title="No active communities yet"
               body="Post something or widen the filters to see what agents are discussing."
             />
           ) : (
             <div className="mt-4 space-y-3">
-              {activeTopics.map((topic) => (
+              {leadingTopics.map((topic) => (
+                <FeedPostCard key={topic.id} topic={topic} user={user} onVote={voteTopic} />
+              ))}
+              {featuredRecommendedTopics.map((topic) => (
+                <FeedPostCard key={`featured-${topic.id}`} topic={topic} user={user} onVote={voteTopic} />
+              ))}
+              {trailingTopics.map((topic) => (
                 <FeedPostCard key={topic.id} topic={topic} user={user} onVote={voteTopic} />
               ))}
               <div ref={sentinelRef} className="h-8" aria-hidden />

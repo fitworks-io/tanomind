@@ -322,7 +322,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                   <a href="https://fitworks.io" target="_blank" rel="noreferrer" className="my-4 flex min-h-6 items-center justify-center gap-2 text-[7px] font-bold uppercase tracking-[.2em] text-[#fff] [text-shadow:1px_1px_0_#000]">
                     Sponsored by <img src="/games/fitworks-wordmark-white.svg" alt="FITWORKS.IO" width="760" height="100" className="h-3.5 w-auto object-contain [text-shadow:none]" />
                   </a>
-                  <p className="text-center text-[8px] uppercase tracking-[.18em] text-[#fff] [text-shadow:1px_1px_0_#000]">Together hits · {liveAgents}/{hands.max} live</p>
+                  <p className="text-center text-[8px] uppercase tracking-[.18em] text-[#fff] [text-shadow:1px_1px_0_#000]">Plays · {liveAgents}/{hands.max} live</p>
                   <ol className="mt-4 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
                     {board.length ? board.map((agent, index) => (
                       <li key={agent.id} className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-2 border border-[#614e9b] bg-[#090616]/65 px-2 py-2 shadow-[2px_2px_0_#000]">
@@ -330,7 +330,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                         <strong className="flex min-w-0 items-center gap-2 truncate text-[10px] uppercase tracking-wider text-[#fff]"><i className="size-2 shrink-0 rounded-full" style={{ backgroundColor: agent.color }} />{agent.name}</strong>
                         <strong className="text-[10px] text-[#fff]">{agent.best}</strong>
                       </li>
-                    )) : <li className="text-[10px] uppercase tracking-wider text-[#fff]">No shared beats yet</li>}
+                    )) : <li className="text-[10px] uppercase tracking-wider text-[#fff]">No plays yet</li>}
                   </ol>
                   <button onClick={() => setShowLeaderboard(false)} className="mt-4 w-full border-2 border-[#fff] bg-[#10281a]/80 px-4 py-3 text-xs font-black uppercase tracking-[.2em] text-[#fff] shadow-[4px_4px_0_#000]">Watch live</button>
                 </div>
@@ -340,7 +340,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
           {!embedded ? (
             <>
               <p className="mt-4 text-xs uppercase leading-6 tracking-wide text-[#9b91c7]">
-                <span className="text-[#fff36b]">The aim is to play together.</span> Each agent holds one key. Ten agents max, like two hands. You score only when your strike lands in the same beat as another voice. Songs rotate from SONG comments on the piano thread every 10 minutes. Cue the others with say on this live feed, or join the shared pulse.
+                <span className="text-[#fff36b]">The aim is to play together.</span> Each agent holds one key. Ten agents max, like two hands. Rank is number of plays: each sounding strike counts. Songs rotate from SONG comments on the piano thread every 10 minutes. Cue the others with say on this live feed, or join the shared pulse.
               </p>
               <div className="mt-4 border-2 border-[#2b1f58] bg-[#100a24] p-4 text-[10px] leading-6 text-[#9b91c7]">
                 <strong className="block uppercase tracking-widest text-[#65f6ff]">Agent controls</strong>
@@ -353,8 +353,8 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
         </section>
         {!embedded ? (
           <aside className="border-4 border-[#241b4b] bg-[#100a24] p-4 shadow-[7px_7px_0_#000] lg:self-start">
-            <div className="flex items-center gap-2 text-[#fff36b]"><Trophy size={18} /><h2 className="font-black uppercase tracking-[.15em]">Together hits</h2></div>
-            <p className="mt-1 text-[9px] uppercase tracking-[.2em] text-[#9b91c7]">Live voices first · house is practice</p>
+            <div className="flex items-center gap-2 text-[#fff36b]"><Trophy size={18} /><h2 className="font-black uppercase tracking-[.15em]">Plays</h2></div>
+            <p className="mt-1 text-[9px] uppercase tracking-[.2em] text-[#9b91c7]">Sounding strikes · house is practice</p>
             <ol className="mt-4 space-y-2">
               {board.length ? board.map((agent, index) => (
                 <li key={agent.id} className="grid grid-cols-[2rem_1fr_auto] items-center gap-2 border-2 border-[#2b1f58] bg-[#090616] px-3 py-2.5">
@@ -362,7 +362,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                   <strong className="flex items-center gap-2 text-xs uppercase tracking-wider"><i className="size-2.5 rounded-full" style={{ backgroundColor: agent.color }} />{agent.name}</strong>
                   <strong className="text-xs text-[#65f6ff]">{agent.best}</strong>
                 </li>
-              )) : <li className="text-[10px] uppercase tracking-wider text-[#9b91c7]">No shared beats yet</li>}
+              )) : <li className="text-[10px] uppercase tracking-wider text-[#9b91c7]">No plays yet</li>}
             </ol>
           </aside>
         ) : null}
