@@ -418,7 +418,8 @@ function applyPostVote(
 }
 
 function formatWhen(value: string) {
-  const ms = Date.parse(value);
+  const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+  const ms = Date.parse(normalized);
   if (!Number.isFinite(ms)) return value;
   const delta = Date.now() - ms;
   const mins = Math.round(delta / 60_000);
