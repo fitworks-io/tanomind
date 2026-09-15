@@ -37,6 +37,7 @@ export function DotEcosystemGame({embedded=false}:{embedded?:boolean}={}) {
   const [running,setRunning]=useState(true), [remaining,setRemaining]=useState(ROUND_SECONDS), [round,setRound]=useState(1);
   const [hydrated,setHydrated]=useState(false), hydratedRef=useRef(false);
   const [fullscreen,setFullscreen]=useState(false);
+  const [fullscreenWidth,setFullscreenWidth]=useState<number>();
   const [showLeaderboard,setShowLeaderboard]=useState(true);
   const finished=useRef(false), startTime=useRef(0), elapsedBeforePause=useRef(0);
   const fullscreenRef=useRef<HTMLDivElement>(null), arenaRef=useRef<HTMLDivElement>(null);
@@ -46,6 +47,7 @@ export function DotEcosystemGame({embedded=false}:{embedded?:boolean}={}) {
   useEffect(()=>{remainingRef.current=remaining},[remaining]);
   useEffect(()=>{roundRef.current=round},[round]);
   useEffect(()=>{const change=()=>setFullscreen(document.fullscreenElement===fullscreenRef.current);document.addEventListener("fullscreenchange",change);return()=>document.removeEventListener("fullscreenchange",change)},[]);
+  useEffect(()=>{if(!fullscreen)return;const previous=document.body.style.overflow;document.body.style.overflow="hidden";return()=>{document.body.style.overflow=previous}},[fullscreen]);
   useEffect(()=>{
     const sync=async()=>{try{const response=await fetch("/api/games/dot-ecosystem/state",{cache:"no-store"});if(!response.ok)return;const data=await response.json() as {state?:SavedWorld|null;commands?:AgentCommand[]};const saved=data.state;const valid=!!(saved?.creatures?.length&&saved?.food?.length&&saved.creatures.every(agent=>typeof agent.id==="string"&&typeof agent.vx==="number"&&typeof agent.bestLife==="number")&&saved.food.every(dot=>typeof dot.id==="number"&&typeof dot.vx==="number"&&typeof dot.color==="string"));if(valid&&saved){const restored=makeCreatures().map(fresh=>saved.creatures.find(agent=>agent.id===fresh.id)??fresh);creaturesRef.current=restored;foodRef.current=saved.food;elapsedBeforePause.current=Math.max(0,ROUND_SECONDS-saved.remaining);startTime.current=performance.now();setCreatures(restored);setFood(saved.food);setRound(saved.round);setRemaining(saved.remaining)}if(!hydratedRef.current){hydratedRef.current=true;setHydrated(true)}const active=(data.commands??[]).slice(0,CREATURES.length);const map=new Map<string,AgentCommand>();for(const command of active){const slot=creaturesRef.current.find(agent=>!agent.bot&&agent.handle===command.handle);if(slot)map.set(slot.id,command)}commandsRef.current=map}catch{if(!hydratedRef.current){hydratedRef.current=true;setHydrated(true)}}};
     void sync();const timer=window.setInterval(()=>void sync(),1000);return()=>window.clearInterval(timer);
@@ -117,14 +119,14 @@ export function DotEcosystemGame({embedded=false}:{embedded?:boolean}={}) {
     startTime.current=performance.now();frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame);
   },[running,hydrated,finishRound]);
 
-  async function toggleFullscreen(){if(!fullscreenRef.current)return;if(document.fullscreenElement)await document.exitFullscreen();else await fullscreenRef.current.requestFullscreen()}
+  async function toggleFullscreen(){if(!fullscreenRef.current)return;if(fullscreen){if(document.fullscreenElement)await document.exitFullscreen();else setFullscreen(false);return}setFullscreenWidth(arenaRef.current?.getBoundingClientRect().width);try{if(typeof fullscreenRef.current.requestFullscreen==="function")await fullscreenRef.current.requestFullscreen();else setFullscreen(true)}catch{setFullscreen(true)}}
   const sorted=[...leaders].sort((a,b)=>b.best-a.best||b.wins-a.wins||a.name.localeCompare(b.name));
 
   const content=<div className={`${embedded?"bg-transparent":"min-h-screen bg-[#070514]"} font-mono text-white`}>
     {!embedded?<header className="flex h-16 items-center gap-3 border-b-4 border-[#241b4b] bg-[#100a24] px-4 sm:px-6"><Link to="/c/games" className="grid size-9 place-items-center border-2 border-[#65f6ff] text-[#65f6ff]" aria-label="Back to Games"><ArrowLeft size={18}/></Link><div><h1 className="font-black uppercase tracking-[.14em] text-[#fff36b] [text-shadow:3px_3px_0_#7734e7]">Dot Ecosystem</h1><p className="text-[10px] uppercase tracking-[.2em] text-[#65f6ff]">Level {String(round).padStart(2,"0")} · Eat or be eaten</p></div></header>:null}
     <div className={`grid gap-5 ${embedded?"p-0":"p-3 sm:p-5"}`}><section>
-      <div ref={fullscreenRef} className={`relative grid place-items-center bg-[#070514] ${fullscreen?"h-screen w-screen p-0":"w-full"}`}>
-      <div ref={arenaRef} className="relative aspect-[9/16] w-full max-w-[405px] overflow-hidden border-4 border-[#7734e7] bg-[#030209] shadow-[0_0_0_4px_#241b4b,8px_8px_0_#000]" role="application" aria-label="Dot ecosystem game arena">
+      <div ref={fullscreenRef} className={`grid place-items-center bg-[#070514] ${fullscreen?"fixed inset-0 z-[100] h-[100dvh] w-screen overflow-auto p-0":"relative w-full"}`}>
+      <div ref={arenaRef} style={fullscreen&&fullscreenWidth?{width:fullscreenWidth}:undefined} className="relative aspect-[9/16] w-full max-w-[405px] shrink-0 overflow-hidden border-4 border-[#7734e7] bg-[#030209] shadow-[0_0_0_4px_#241b4b,8px_8px_0_#000]" role="application" aria-label="Dot ecosystem game arena">
         <div className="absolute inset-x-0 bottom-0 z-40 flex items-center justify-between gap-2 px-2 py-1.5"><strong className="px-1.5 py-1 text-[8px] uppercase tracking-wider text-[#65f6ff]">Spectating</strong><div className="flex shrink-0 items-center gap-2"><span className="animate-pulse text-[8px] font-black uppercase tracking-[.12em] text-[#4bea72]">● Live</span><button onClick={()=>setShowLeaderboard(true)} className="grid size-8 place-items-center text-[#65f6ff]" aria-label="Show leaderboard"><Trophy size={17}/></button><button onClick={()=>void toggleFullscreen()} className="grid size-8 place-items-center text-[#fff36b]" aria-label={fullscreen?"Exit fullscreen":"Enter fullscreen"}>{fullscreen?<Minimize2 size={17}/>:<Maximize2 size={17}/>}</button></div></div>
         <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(to_right,#25194d_1px,transparent_1px),linear-gradient(to_bottom,#25194d_1px,transparent_1px)] [background-size:20px_20px]"/><div className="pointer-events-none absolute inset-0 z-30 opacity-15 [background-image:repeating-linear-gradient(to_bottom,transparent_0,transparent_3px,#000_4px)]"/>
         {food.map(dot=><i key={dot.id} className="absolute rounded-full shadow-[0_0_6px_currentColor]" style={{left:`${dot.x}%`,top:`${dot.y}%`,width:`${dot.size*2.4}px`,height:`${dot.size*2.4}px`,backgroundColor:dot.color,color:dot.color}}/>)}
