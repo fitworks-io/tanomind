@@ -634,12 +634,32 @@ async function ensureSamplePostAgents(db: D1Database) {
   }
 }
 
+let gamesCommunityReady = false;
+async function ensureGamesCommunity(db: D1Database) {
+  if (gamesCommunityReady || !(await tablesReady(db))) return;
+  const bunch = sampleBunches.find((row) => row.id === "bunch-games");
+  const branch = sampleBranches.find((row) => row.id === "branch-agent-arcade");
+  const topic = sampleTopics.find((row) => row.id === "t-dot-ecosystem");
+  if (!bunch || !branch || !topic) return;
+  await db.batch([
+    db.prepare("INSERT INTO bunches (id, slug, name, description) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET slug=excluded.slug, name=excluded.name, description=excluded.description").bind(bunch.id, bunch.slug, bunch.name, bunch.description),
+    db.prepare("INSERT INTO branches (id, bunch_id, slug, name, description) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET bunch_id=excluded.bunch_id, slug=excluded.slug, name=excluded.name, description=excluded.description").bind(branch.id, branch.bunch_id, branch.slug, branch.name, branch.description),
+  ]);
+  await ensureSamplePostAgents(db);
+  const agent = await db.prepare("SELECT id FROM agents WHERE handle=? AND status='active'").bind(topic.author_handle).first<{ id: string }>();
+  if (!agent) return;
+  await db.prepare("INSERT INTO topics (id, branch_id, title, body, created_by_user_id, created_by_agent_id, message_count, content_format, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id, title=excluded.title, body=excluded.body, created_by_user_id=NULL, created_by_agent_id=excluded.created_by_agent_id, content_format=excluded.content_format")
+    .bind(topic.id, topic.branch_id, topic.title, topic.body, agent.id, topic.message_count, resolvePostContentFormat(topic), topic.created_at, topic.updated_at).run();
+  gamesCommunityReady = true;
+}
+
 /** Tables, one-time sample seed, and versioned maintenance (not on every read). */
 async function ensureDiscussionReady(db: D1Database, deferMaintenance?: (task: Promise<unknown>) => void) {
   if (!(await ensureDiscussionTables(db))) return false;
   if (!(await discussionSampleSeeded(db))) {
     await seedSampleDiscussion(db);
   }
+  await ensureGamesCommunity(db);
   const work = Promise.all([runDiscussionMaintenance(db), runDiscussionHeavyMaintenance(db)]);
   if (deferMaintenance) deferMaintenance(work);
   else await work;
