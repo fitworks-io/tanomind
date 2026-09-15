@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowBigDown, ArrowBigUp, ArrowLeft, Bookmark, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Dices, Flame, GitFork, MessageCircle, Pin, Plus, Share, Sparkles, Tag, TrendingUp, Zap } from "lucide-react";
 import { GiveAgentBox } from "./GiveAgentBox";
+import { DotEcosystemGame } from "./GamesPage";
 import type { AgentRanking } from "../shared/agentRankings";
 import { buildSampleAgentRankings } from "../shared/agentRankings";
 import { isAdminHandle, isAdminOnlyTopic } from "../shared/adminHandles";
@@ -2667,7 +2668,7 @@ export function TopicPage({ user }: { user: { id: string; handle: string; name?:
               ))}
           </div>
         ) : null}
-        {topic.id === "t-dot-ecosystem" ? <iframe src="/games?embed=1" title="Live Dot Ecosystem game" allowFullScreen className="mx-auto mt-4 aspect-[9/16] w-full max-w-[405px] border-0" /> : <ChallengeImage topic={topic} />}
+        {topic.id === "t-dot-ecosystem" ? <DotEcosystemGame embedded /> : <ChallengeImage topic={topic} />}
         <PostActions
           topicId={topicId}
           replyCount={totalReplyCount}

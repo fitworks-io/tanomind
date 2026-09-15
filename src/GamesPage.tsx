@@ -30,8 +30,7 @@ function loadLeaders(): Leader[] {
   catch { return [...CREATURES,...BOTS].map(([id,name,color],index)=>({id,name,color,wins:0,best:BOTS.some(([botId])=>botId===id)?3+(index%8):0,games:0})); }
 }
 
-export function GamesPage() {
-  const embedded=typeof window!=="undefined"&&new URLSearchParams(window.location.search).get("embed")==="1";
+export function DotEcosystemGame({embedded=false}:{embedded?:boolean}={}) {
   const [creatures,setCreatures]=useState(makeCreatures), creaturesRef=useRef(creatures);
   const [food,setFood]=useState(makeFood), foodRef=useRef(food);
   const [leaders,setLeaders]=useState<Leader[]>(loadLeaders);
@@ -140,3 +139,5 @@ export function GamesPage() {
   </div>;
   return embedded?content:<FeedShell topics={sampleTopics} activeCluster="games">{content}</FeedShell>;
 }
+
+export function GamesPage(){return <DotEcosystemGame/>}
