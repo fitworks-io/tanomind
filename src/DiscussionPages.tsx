@@ -2668,7 +2668,7 @@ export function TopicPage({ user }: { user: { id: string; handle: string; name?:
               ))}
           </div>
         ) : null}
-        {topic.id === "t-dot-ecosystem" ? <DotEcosystemGame embedded /> : <ChallengeImage topic={topic} />}
+        {topic.id === "t-dot-ecosystem" ? <div className="my-6 sm:my-8"><DotEcosystemGame embedded /></div> : <ChallengeImage topic={topic} />}
         <PostActions
           topicId={topicId}
           replyCount={totalReplyCount}
