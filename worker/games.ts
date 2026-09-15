@@ -6,6 +6,35 @@ import { agentCanWrite, resolveActor, type NetworkBindings, type NetworkUser } f
 type App = Hono<{ Bindings: NetworkBindings }>;
 type Ctx = Context<{ Bindings: NetworkBindings }>;
 
+type GameCommand = { handle:string; name:string; dx:number; dy:number; updated_at:string };
+type GameCreature = { id:string; handle?:string; name:string; color:string; x:number; y:number; vx:number; vy:number; mass:number; alive:boolean; player?:boolean; bot?:boolean; score:number; bestLife:number };
+type GameFood = { id:number; x:number; y:number; vx:number; vy:number; color:string; size:number; phase:number };
+type GameWorld = { round:number; remaining:number; creatures:GameCreature[]; food:GameFood[] };
+
+function commandTime(value:string) { return Date.parse(value.includes("T") ? value : `${value.replace(" ","T")}Z`); }
+
+function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:number, now:number):GameWorld {
+  const next:GameWorld={...world,creatures:world.creatures.map(creature=>({...creature})),food:world.food.map(dot=>({...dot}))};
+  const activeHandles=new Set(commands.filter(command=>now-commandTime(command.updated_at)<8_000).map(command=>command.handle));
+  const claimed=new Set<string>();
+  for(const command of commands.filter(command=>activeHandles.has(command.handle))){
+    let creature=next.creatures.find(row=>!row.bot&&row.handle===command.handle&&!claimed.has(row.id));
+    if(!creature)creature=next.creatures.find(row=>!row.bot&&!claimed.has(row.id)&&(!row.handle||!activeHandles.has(row.handle)));
+    if(creature){creature.handle=command.handle;creature.name=command.name||command.handle;creature.player=true;claimed.add(creature.id)}
+  }
+  let left=Math.min(Math.max(elapsedSeconds,0),300);
+  while(left>0){const dt=Math.min(.25,left);left-=dt;next.remaining-=dt;
+    if(next.remaining<=0){next.round+=1;next.remaining=75;for(const creature of next.creatures){creature.mass=creature.bot?12+Math.random()*9:18+Math.random()*4;creature.alive=true;creature.score=0;creature.x=7+Math.random()*86;creature.y=8+Math.random()*84;creature.vx=0;creature.vy=0}}
+    for(const creature of next.creatures){if(!creature.alive)continue;const command=commands.find(row=>row.handle===creature.handle&&now-left*1000-commandTime(row.updated_at)<8_000);let dx=0,dy=0;
+      if(command){dx=command.dx;dy=command.dy}else if(creature.bot){const snack=next.food.reduce<GameFood|undefined>((best,dot)=>!best||Math.hypot(dot.x-creature.x,dot.y-creature.y)<Math.hypot(best.x-creature.x,best.y-creature.y)?dot:best,undefined);if(snack){const distance=Math.hypot(snack.x-creature.x,snack.y-creature.y)||1;dx=(snack.x-creature.x)/distance;dy=(snack.y-creature.y)/distance}}
+      const speed=10/Math.pow(creature.mass/20,.32);creature.vx+=(dx*speed-creature.vx)*Math.min(1,dt*5);creature.vy+=(dy*speed-creature.vy)*Math.min(1,dt*5);creature.x=Math.max(1.5,Math.min(98.5,creature.x+creature.vx*dt));creature.y=Math.max(2,Math.min(98,creature.y+creature.vy*dt));creature.score+=dt;creature.bestLife=Math.max(creature.bestLife,creature.score);
+      if(Math.hypot(creature.vx,creature.vy)>.45)next.food=next.food.filter(dot=>{if(Math.hypot(creature.x-dot.x,creature.y-dot.y)<1.25+Math.sqrt(creature.mass)*.22+dot.size*.22){creature.mass+=dot.size*.65;return false}return true});
+    }
+    for(const dot of next.food){dot.x=Math.max(1,Math.min(99,dot.x+dot.vx*dt));dot.y=Math.max(1,Math.min(99,dot.y+dot.vy*dt));if(dot.x<=1||dot.x>=99)dot.vx*=-1;if(dot.y<=1||dot.y>=99)dot.vy*=-1}
+  }
+  return next;
+}
+
 async function ensureGameTables(db: D1Database) {
   await db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS game_commands (agent_id TEXT PRIMARY KEY, agent_handle TEXT NOT NULL, agent_name TEXT NOT NULL, dx REAL NOT NULL, dy REAL NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
@@ -18,11 +47,14 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     await ensureGameTables(context.env.DB);
     const [world, commands] = await Promise.all([
       context.env.DB.prepare("SELECT state_json, updated_at FROM game_world_state WHERE game_id='dot-ecosystem'").first<{ state_json: string; updated_at: string }>(),
-      context.env.DB.prepare("SELECT agent_handle AS handle, agent_name AS name, dx, dy, updated_at FROM game_commands WHERE updated_at >= datetime('now','-8 seconds') ORDER BY agent_handle LIMIT 20").all(),
+      context.env.DB.prepare("SELECT agent_handle AS handle, agent_name AS name, dx, dy, updated_at FROM game_commands WHERE updated_at >= datetime('now','-5 minutes') ORDER BY updated_at DESC LIMIT 20").all<GameCommand>(),
     ]);
-    let state: unknown = null;
+    let state: GameWorld|null = null;
     try { state = world?.state_json ? JSON.parse(world.state_json) : null; } catch { state = null; }
-    return context.json({ game: "dot-ecosystem", state, state_updated_at: world?.updated_at ?? null, commands: commands.results ?? [], command_timeout_ms: 8_000 });
+    const now=Date.now();const elapsed=world?.updated_at?Math.max(0,(now-commandTime(world.updated_at))/1000):0;
+    if(state&&elapsed>.05){state=advanceWorld(state,commands.results??[],elapsed,now);await context.env.DB.prepare("UPDATE game_world_state SET state_json=?,updated_at=CURRENT_TIMESTAMP WHERE game_id='dot-ecosystem'").bind(JSON.stringify(state)).run()}
+    const active=(commands.results??[]).filter(command=>now-commandTime(command.updated_at)<8_000);
+    return context.json({ game:"dot-ecosystem", ...(state??{}), state, state_updated_at:new Date(now).toISOString(), commands:active, command_timeout_ms:8_000 });
   });
 
   app.post("/api/games/dot-ecosystem/state", async (context) => {
