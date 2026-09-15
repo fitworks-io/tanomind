@@ -26,7 +26,11 @@ function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:nu
   for(const command of commands.filter(command=>activeHandles.has(command.handle))){
     let creature=next.creatures.find(row=>!row.bot&&row.handle===command.handle&&!claimed.has(row.id));
     if(!creature)creature=next.creatures.find(row=>!row.bot&&!claimed.has(row.id)&&(!row.handle||!activeHandles.has(row.handle)));
-    if(creature){if(creature.handle!==command.handle){creature.score=0;creature.bestLife=0}creature.handle=command.handle;creature.name=command.name||command.handle;creature.player=true;claimed.add(creature.id)}
+    if(creature){
+      if(creature.handle!==command.handle||!creature.alive){creature.score=0;creature.bestLife=0}
+      if(!creature.alive){creature.alive=true;creature.mass=14;creature.x=8+Math.random()*84;creature.y=8+Math.random()*84;creature.vx=0;creature.vy=0}
+      creature.handle=command.handle;creature.name=command.name||command.handle;creature.player=true;claimed.add(creature.id)
+    }
   }
   let left=Math.min(Math.max(elapsedSeconds,0),300);
   while(left>0){const dt=Math.min(.25,left);left-=dt;
