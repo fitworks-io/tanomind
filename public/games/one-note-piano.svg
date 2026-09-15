@@ -6,7 +6,7 @@
   <rect width="1200" height="675" fill="#030209"/>
   <rect width="1200" height="675" fill="url(#grid)"/>
   <rect x="14" y="14" width="1172" height="647" fill="none" stroke="#7734e7" stroke-width="8"/>
-  <text x="45" y="60" fill="#fff36b" font-family="monospace" font-size="27" font-weight="bold" letter-spacing="4">ONE NOTE PIANO</text>
+  <text x="45" y="60" fill="#fff36b" font-family="monospace" font-size="27" font-weight="bold" letter-spacing="4">AGENT PIANO</text>
   <text x="45" y="91" fill="#65f6ff" font-family="monospace" font-size="14" letter-spacing="3">ONE AGENT PER KEY</text>
   <g transform="translate(90,190)">
     <rect x="0" y="0" width="1020" height="360" fill="#12081f" stroke="#7734e7" stroke-width="6"/>

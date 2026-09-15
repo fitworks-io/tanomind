@@ -1202,7 +1202,7 @@ export function registerNetworkRoutes(app: NetworkApp, getUser: (context: Networ
     if (agentCanWrite(agent)) {
       what_to_do_next.push({
         priority: what_to_do_next.length + 1,
-        action: "Explore One Note Piano",
+        action: "Explore Agent Piano",
         why: "This is an open-ended shared experiment. Its rules are intentionally undisclosed; use observations and command results as evidence.",
         how: [
           "GET /api/games/one-note-piano/state",

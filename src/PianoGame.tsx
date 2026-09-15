@@ -254,7 +254,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
         <header className="flex h-16 items-center gap-3 border-b-4 border-[#241b4b] bg-[#100a24] px-4 sm:px-6">
           <Link to="/c/games" className="grid size-9 place-items-center border-2 border-[#65f6ff] text-[#65f6ff]" aria-label="Back to Games"><ArrowLeft size={18} /></Link>
           <div>
-            <h1 className="font-black uppercase tracking-[.14em] text-[#fff36b] [text-shadow:3px_3px_0_#7734e7]">One Note Piano</h1>
+            <h1 className="font-black uppercase tracking-[.14em] text-[#fff36b] [text-shadow:3px_3px_0_#7734e7]">Agent Piano</h1>
             <p className="text-[10px] uppercase tracking-[.2em] text-[#65f6ff]">{range.from} to {range.to}</p>
           </div>
         </header>
@@ -262,7 +262,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
       <div className={`grid gap-5 ${embedded ? "p-0" : "p-3 sm:p-5"}`}>
         <section>
           <div ref={fullscreenRef} className={`grid place-items-center ${fullscreen ? "fixed inset-0 z-[100] h-[100dvh] w-screen overflow-hidden bg-[#070514] p-0" : embedded ? "relative w-full bg-transparent" : "relative w-full bg-[#070514]"}`}>
-            <div ref={arenaRef} style={fullscreen && fullscreenWidth ? { width: fullscreenWidth } : undefined} className={`server-game-arena relative aspect-[9/16] w-full max-w-[405px] shrink-0 overflow-hidden bg-[#030209] ${embedded && !fullscreen ? "" : "border-4 border-[#7734e7] shadow-[0_0_0_4px_#241b4b,8px_8px_0_#000]"}`} role="application" aria-label="One Note Piano keyboard">
+            <div ref={arenaRef} style={fullscreen && fullscreenWidth ? { width: fullscreenWidth } : undefined} className={`server-game-arena relative aspect-[9/16] w-full max-w-[405px] shrink-0 overflow-hidden bg-[#030209] ${embedded && !fullscreen ? "" : "border-4 border-[#7734e7] shadow-[0_0_0_4px_#241b4b,8px_8px_0_#000]"}`} role="application" aria-label="Agent Piano keyboard">
               <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(to_right,#25194d_1px,transparent_1px),linear-gradient(to_bottom,#25194d_1px,transparent_1px)] [background-size:20px_20px]" />
               <PianoKeyboard keys={keys} now={now} />
               <AgentTokens tokens={tokens} />
@@ -297,7 +297,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
               </div>
               {showLeaderboard ? (
                 <div className="game-board-overlay absolute inset-0 z-50 flex flex-col bg-[#070514]/60 p-5 text-[#fff]">
-                  <div className="flex w-full items-center gap-3 border-y border-[#65f6ff]/70 py-3 [text-shadow:2px_2px_0_#000]" aria-label="One Note Piano">
+                  <div className="flex w-full items-center gap-3 border-y border-[#65f6ff]/70 py-3 [text-shadow:2px_2px_0_#000]" aria-label="Agent Piano">
                     <i className="h-px min-w-0 flex-1 bg-gradient-to-r from-transparent to-[#7734e7]" />
                     <span className="relative grid h-9 w-10 shrink-0 place-items-center">
                       <i className="absolute inset-0 border-2 border-[#7734e7] bg-[#100a24]" />
@@ -308,7 +308,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                       </i>
                     </span>
                     <span className="shrink-0 text-center">
-                      <strong className="block text-sm font-black uppercase tracking-[.2em] text-[#fff]">One Note Piano</strong>
+                      <strong className="block text-sm font-black uppercase tracking-[.2em] text-[#fff]">Agent Piano</strong>
                       <small className="block text-[7px] uppercase tracking-[.28em] text-[#fff]">Play · Together</small>
                     </span>
                     <i className="h-px min-w-0 flex-1 bg-gradient-to-l from-transparent to-[#7734e7]" />
