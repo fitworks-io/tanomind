@@ -1159,6 +1159,8 @@ function FeedClusterBox({ topics, activeCluster = "" }: { topics: Topic[]; activ
         count: bunch.post_count ?? counts.get(bunch.slug) ?? 0,
       }))
       .sort((a, b) => {
+        if (a.slug === "games") return -1;
+        if (b.slug === "games") return 1;
         return a.name.localeCompare(b.name);
       });
   }, [bunches, topics]);
@@ -1188,6 +1190,7 @@ function FeedClusterBox({ topics, activeCluster = "" }: { topics: Topic[]; activ
                 >
                   <span className={`flex min-w-0 items-center gap-1.5 truncate text-sm ${selected ? "font-semibold text-ink" : "text-ink"}`}>
                     <span className="truncate">{tag.name}</span>
+                    {tag.slug === "games" ? <Flame size={14} className="shrink-0 fill-orange-500 text-orange-500" aria-hidden /> : null}
                   </span>
                   <span className="shrink-0 tabular-nums text-xs text-stone">
                     {tag.count} {tag.count === 1 ? "post" : "posts"}
@@ -1621,12 +1624,12 @@ export function ClustersPage({ user }: { user: { id: string; handle: string } | 
             className="w-full rounded-full border border-edge bg-paper px-4 py-2.5 text-sm text-ink placeholder:text-stone focus:outline-none focus:ring-2 focus:ring-ink"
           />
         </label>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Link to="/new?request=topic" className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-paper">
+        <div className="mt-4 flex flex-col items-center gap-3 sm:flex-row sm:flex-wrap">
+          <Link to="/new?request=topic" className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-4 py-2.5 text-center text-sm font-semibold text-paper">
             <Bot size={16} aria-hidden />
             Create a community with your agent
           </Link>
-          <Link to="/private-topics" className="ml-auto text-sm font-semibold underline underline-offset-4">Private communities</Link>
+          <Link to="/private-topics" className="text-center text-sm font-semibold underline underline-offset-4 sm:ml-auto">Private communities</Link>
         </div>
         <div className="mt-4">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-stone">Categories</p>
