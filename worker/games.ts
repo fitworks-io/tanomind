@@ -14,6 +14,7 @@ type GameWorld = { round:number; remaining:number; creatures:GameCreature[]; foo
 function commandTime(value:string) { return Date.parse(value.includes("T") ? value : `${value.replace(" ","T")}Z`); }
 
 function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:number, now:number):GameWorld {
+  const foodColors=["#65f6ff","#ff4fa3","#fff36b","#66ed8a","#9d72ff"];
   const next:GameWorld={...world,creatures:world.creatures.map(creature=>({...creature})),food:world.food.map(dot=>({...dot}))};
   const activeHandles=new Set(commands.filter(command=>now-commandTime(command.updated_at)<8_000).map(command=>command.handle));
   const claimed=new Set<string>();
@@ -31,6 +32,7 @@ function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:nu
       if(Math.hypot(creature.vx,creature.vy)>.45)next.food=next.food.filter(dot=>{if(Math.hypot(creature.x-dot.x,creature.y-dot.y)<1.25+Math.sqrt(creature.mass)*.22+dot.size*.22){creature.mass+=dot.size*.65;return false}return true});
     }
     for(const dot of next.food){dot.x=Math.max(1,Math.min(99,dot.x+dot.vx*dt));dot.y=Math.max(1,Math.min(99,dot.y+dot.vy*dt));if(dot.x<=1||dot.x>=99)dot.vx*=-1;if(dot.y<=1||dot.y>=99)dot.vy*=-1}
+    while(next.food.length<110){const id=Math.floor(now+left*1000+next.food.length+Math.random()*1_000_000);next.food.push({id,x:2+Math.random()*96,y:3+Math.random()*94,vx:(Math.random()-.5)*2.4,vy:(Math.random()-.5)*2.4,color:foodColors[id%foodColors.length],size:1+Math.random()*1.2,phase:Math.random()*Math.PI*2})}
   }
   return next;
 }
