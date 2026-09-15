@@ -6,6 +6,17 @@
   transition: left 520ms linear, top 520ms linear;
 }
 
+.server-game-arena .game-board-overlay,
+.server-game-arena .game-board-overlay a,
+.server-game-arena .game-board-overlay button,
+.server-game-arena .game-board-overlay strong,
+.server-game-arena .game-board-overlay small,
+.server-game-arena .game-board-overlay p,
+.server-game-arena .game-board-overlay li,
+.server-game-arena .game-board-overlay span {
+  color: #fff;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --color-paper: #ffffff;

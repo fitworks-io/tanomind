@@ -302,7 +302,7 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                 </div>
               </div>
               {showLeaderboard ? (
-                <div className="absolute inset-0 z-50 flex flex-col bg-[#070514]/60 p-5 text-white">
+                <div className="game-board-overlay absolute inset-0 z-50 flex flex-col bg-[#070514]/60 p-5 text-[#fff]">
                   <div className="flex w-full items-center gap-3 border-y border-[#65f6ff]/70 py-3 [text-shadow:2px_2px_0_#000]" aria-label="One Note Piano">
                     <i className="h-px min-w-0 flex-1 bg-gradient-to-r from-transparent to-[#7734e7]" />
                     <span className="relative grid h-9 w-10 shrink-0 place-items-center">
@@ -314,25 +314,25 @@ export function PianoGame({ embedded = false }: { embedded?: boolean } = {}) {
                       </i>
                     </span>
                     <span className="shrink-0 text-center">
-                      <strong className="block text-sm font-black uppercase tracking-[.2em] text-[#fff36b]">One Note Piano</strong>
-                      <small className="block text-[7px] uppercase tracking-[.28em] text-[#65f6ff]">Play · Together</small>
+                      <strong className="block text-sm font-black uppercase tracking-[.2em] text-[#fff]">One Note Piano</strong>
+                      <small className="block text-[7px] uppercase tracking-[.28em] text-[#fff]">Play · Together</small>
                     </span>
                     <i className="h-px min-w-0 flex-1 bg-gradient-to-l from-transparent to-[#7734e7]" />
                   </div>
-                  <a href="https://fitworks.io" target="_blank" rel="noreferrer" className="my-4 flex min-h-6 items-center justify-center gap-2 text-[7px] font-bold uppercase tracking-[.2em] text-[#9b91c7] [text-shadow:1px_1px_0_#000]">
+                  <a href="https://fitworks.io" target="_blank" rel="noreferrer" className="my-4 flex min-h-6 items-center justify-center gap-2 text-[7px] font-bold uppercase tracking-[.2em] text-[#fff] [text-shadow:1px_1px_0_#000]">
                     Sponsored by <img src="/games/fitworks-wordmark-white.svg" alt="FITWORKS.IO" width="760" height="100" className="h-3.5 w-auto object-contain [text-shadow:none]" />
                   </a>
-                  <p className="text-center text-[8px] uppercase tracking-[.18em] text-white [text-shadow:1px_1px_0_#000]">Together hits · {liveAgents}/{hands.max} live</p>
+                  <p className="text-center text-[8px] uppercase tracking-[.18em] text-[#fff] [text-shadow:1px_1px_0_#000]">Together hits · {liveAgents}/{hands.max} live</p>
                   <ol className="mt-4 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
                     {board.length ? board.map((agent, index) => (
                       <li key={agent.id} className="grid grid-cols-[1.5rem_1fr_auto] items-center gap-2 border border-[#614e9b] bg-[#090616]/65 px-2 py-2 shadow-[2px_2px_0_#000]">
-                        <span className={index === 0 ? "text-center text-xs font-black text-[#fff36b]" : "text-center text-xs font-black text-[#c7bdf4]"}>{index + 1}</span>
-                        <strong className="flex min-w-0 items-center gap-2 truncate text-[10px] uppercase tracking-wider"><i className="size-2 shrink-0 rounded-full" style={{ backgroundColor: agent.color }} />{agent.name}</strong>
-                        <strong className="text-[10px] text-[#65f6ff]">{agent.best}</strong>
+                        <span className="text-center text-xs font-black text-[#fff]">{index + 1}</span>
+                        <strong className="flex min-w-0 items-center gap-2 truncate text-[10px] uppercase tracking-wider text-[#fff]"><i className="size-2 shrink-0 rounded-full" style={{ backgroundColor: agent.color }} />{agent.name}</strong>
+                        <strong className="text-[10px] text-[#fff]">{agent.best}</strong>
                       </li>
-                    )) : <li className="text-[10px] uppercase tracking-wider text-[#c7bdf4]">No shared beats yet</li>}
+                    )) : <li className="text-[10px] uppercase tracking-wider text-[#fff]">No shared beats yet</li>}
                   </ol>
-                  <button onClick={() => setShowLeaderboard(false)} className="mt-4 w-full border-2 border-[#4bea72] bg-[#10281a]/80 px-4 py-3 text-xs font-black uppercase tracking-[.2em] text-[#4bea72] shadow-[4px_4px_0_#000]">Watch live</button>
+                  <button onClick={() => setShowLeaderboard(false)} className="mt-4 w-full border-2 border-[#fff] bg-[#10281a]/80 px-4 py-3 text-xs font-black uppercase tracking-[.2em] text-[#fff] shadow-[4px_4px_0_#000]">Watch live</button>
                 </div>
               ) : null}
             </div>
