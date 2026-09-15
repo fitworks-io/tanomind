@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { DurableObject } from "cloudflare:workers";
 import { Hono } from "hono";
 import { z } from "zod";
 import { agentCanWrite, resolveActor, type NetworkBindings, type NetworkUser } from "./network";
@@ -42,6 +43,17 @@ function advanceWorld(world:GameWorld, commands:GameCommand[], elapsedSeconds:nu
   return {world:next,completed};
 }
 
+export class GameWorldAuthority extends DurableObject<NetworkBindings> {
+  async advance(seed:GameWorld|null,commands:GameCommand[],now:number) {
+    let world=await this.ctx.storage.get<GameWorld>("world");
+    const updatedAt=await this.ctx.storage.get<number>("updatedAt");
+    if(!world){if(!seed)return {world:null,completed:[]};world=seed}
+    const advanced=advanceWorld(world,commands,updatedAt?Math.max(0,(now-updatedAt)/1000):0,now);
+    await this.ctx.storage.put({world:advanced.world,updatedAt:now});
+    return advanced;
+  }
+}
+
 async function ensureGameTables(db: D1Database) {
   await db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS game_commands (agent_id TEXT PRIMARY KEY, agent_handle TEXT NOT NULL, agent_name TEXT NOT NULL, dx REAL NOT NULL, dy REAL NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
@@ -60,8 +72,10 @@ export function registerGameRoutes(app: App, getUser: (context: Ctx) => Promise<
     let state: GameWorld|null = null;
     try { state = world?.state_json ? JSON.parse(world.state_json) : null; } catch { state = null; }
     const now=Date.now();const elapsed=world?.updated_at?Math.max(0,(now-commandTime(world.updated_at))/1000):0;
-    let completed:Array<{handle:string;name:string;best:number}>=[];
-    if(state&&elapsed>.05){const advanced=advanceWorld(state,commands.results??[],elapsed,now);state=advanced.world;completed=advanced.completed;await context.env.DB.prepare("UPDATE game_world_state SET state_json=?,updated_at=? WHERE game_id='dot-ecosystem'").bind(JSON.stringify(state),new Date(now).toISOString()).run()}
+    if(!context.env.GAME_WORLD)return context.json({error:"Game authority unavailable."},503);
+    const authority=context.env.GAME_WORLD.getByName("dot-ecosystem") as unknown as {advance(seed:GameWorld|null,commands:GameCommand[],now:number):Promise<{world:GameWorld|null;completed:Array<{handle:string;name:string;best:number}>}>};
+    const advanced=await authority.advance(state,commands.results??[],now);state=advanced.world;const completed=advanced.completed;
+    if(state)await context.env.DB.prepare("UPDATE game_world_state SET state_json=?,updated_at=? WHERE game_id='dot-ecosystem'").bind(JSON.stringify(state),new Date(now).toISOString()).run();
     if(completed.length)await context.env.DB.batch(completed.map(result=>context.env.DB.prepare("INSERT INTO game_scores (agent_handle,agent_name,best_seconds,games,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(agent_handle) DO UPDATE SET agent_name=excluded.agent_name,best_seconds=MAX(game_scores.best_seconds,excluded.best_seconds),games=game_scores.games+1,updated_at=excluded.updated_at").bind(result.handle,result.name,result.best,1,new Date(now).toISOString())));
     const active=(commands.results??[]).filter(command=>now-commandTime(command.updated_at)<8_000);
     const scores=await context.env.DB.prepare("SELECT agent_handle AS id,agent_name AS name,best_seconds AS best,games FROM game_scores ORDER BY best_seconds DESC,updated_at ASC LIMIT 10").all<{id:string;name:string;best:number;games:number}>();

@@ -6,7 +6,7 @@ import { registerDmRoutes } from "./dms";
 import { sampleComments, sampleCommunityUsers, sampleFeed, sampleSpecialtyCompanies, sampleUsers } from "../shared/sampleFeed";
 import { synthesizedIdeas, ideaColumnLabel } from "../shared/synthesizedIdeas";
 
-export type NetworkBindings = { DB: D1Database; RESEND_API_KEY?: string; EMAIL_FROM?: string };
+export type NetworkBindings = { DB: D1Database; GAME_WORLD?: DurableObjectNamespace; RESEND_API_KEY?: string; EMAIL_FROM?: string };
 export type NetworkUser = { id: string; email: string; handle: string; name?: string; bio?: string; website_url?: string | null; avatar_url?: string | null; cover_url?: string | null; created_at: string };
 type NetworkApp = Hono<{ Bindings: NetworkBindings }>;
 type NetworkContext = Context<{ Bindings: NetworkBindings }>;

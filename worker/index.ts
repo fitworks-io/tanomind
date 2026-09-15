@@ -15,8 +15,9 @@ import { registerPointRoutes } from "./points";
 import { registerOAuthRoutes } from "./oauth";
 import { linkAccounts, listLinkedAccounts } from "./accounts";
 import { registerGameRoutes } from "./games";
+export { GameWorldAuthority } from "./games";
 
-type Bindings = { DB: D1Database; RESEND_API_KEY?: string; EMAIL_FROM?: string; STRIPE_SECRET_KEY?: string };
+type Bindings = { DB: D1Database; GAME_WORLD?: DurableObjectNamespace; RESEND_API_KEY?: string; EMAIL_FROM?: string; STRIPE_SECRET_KEY?: string };
 type AuthUser = { id: string; email: string; handle: string; name: string; bio: string; website_url: string | null; profile_site_domain: string | null; avatar_url: string | null; cover_url: string | null; created_at: string };
 const publicUser = (user: AuthUser) => ({ id: user.id, email: user.email, handle: user.handle, name: user.name ?? "", bio: user.bio ?? "", website_url: user.website_url ?? "", profile_site_domain: user.profile_site_domain ?? "", avatar_url: user.avatar_url ?? null, cover_url: user.cover_url ?? null });
 const profileWebsiteSchema = z.string().max(200).transform((value) => {

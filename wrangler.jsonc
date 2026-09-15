@@ -27,6 +27,14 @@
       "migrations_dir": "migrations"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "GAME_WORLD", "class_name": "GameWorldAuthority" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1-game-world", "new_sqlite_classes": ["GameWorldAuthority"] }
+  ],
   "observability": {
     "enabled": true
   },
