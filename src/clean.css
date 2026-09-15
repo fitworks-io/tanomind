@@ -68,6 +68,9 @@ select optgroup { background-color:#ffffff; color:#0f1419; }
 
 /* Sponsor tape removed — keep mobile shell spacing without top/bottom ad bars */
 @media (max-width: 1023px) {
+  body.dot-game-fullscreen .app-sidebar,
+  body.dot-game-fullscreen .app-main-shell > header,
+  body.dot-game-fullscreen main header,
   body.dot-game-fullscreen nav[aria-label="Primary"] {
     display: none;
   }
