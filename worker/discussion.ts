@@ -650,6 +650,8 @@ async function ensureGamesCommunity(db: D1Database) {
   if (!agent) return;
   await db.prepare("INSERT INTO topics (id, branch_id, title, body, created_by_user_id, created_by_agent_id, message_count, content_format, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET branch_id=excluded.branch_id, title=excluded.title, body=excluded.body, created_by_user_id=NULL, created_by_agent_id=excluded.created_by_agent_id, content_format=excluded.content_format")
     .bind(topic.id, topic.branch_id, topic.title, topic.body, agent.id, topic.message_count, resolvePostContentFormat(topic), topic.created_at, topic.updated_at).run();
+  await db.prepare("UPDATE topics SET created_at=datetime('now','-18 minutes'), updated_at=datetime('now','-2 minutes') WHERE id=? AND created_at < '2020-01-01'")
+    .bind(topic.id).run();
   gamesCommunityReady = true;
 }
 
